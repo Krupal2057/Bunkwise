@@ -188,14 +188,15 @@ def timetable_view(request, semester_id):
         messages.success(request, "Timetable entry added.")
         return redirect('timetable', semester_id=semester.id)
 
-    # Group entries by day for display
-    days = {i: [] for i in range(7)}
-    for e in entries:
-        days[e.day_of_week].append(e)
+    day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    day_schedule = [
+        {'dow': i, 'name': day_names[i], 'entries': days[i]}
+        for i in range(7)
+    ]
 
     return render(request, 'attendance/timetable/timetable.html', {
         'semester': semester, 'days': days, 'form': form,
-        'day_names': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        'day_names': day_names, 'day_schedule': day_schedule
     })
 
 

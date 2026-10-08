@@ -62,6 +62,10 @@ class Semester(models.Model):
         return (today - self.start_date).days + 1
 
     @property
+    def total_weeks(self):
+        return max(1, round(self.total_days / 7))
+
+    @property
     def progress_percent(self):
         if self.total_days == 0:
             return 0

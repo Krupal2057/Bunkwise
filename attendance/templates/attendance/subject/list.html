@@ -86,17 +86,16 @@
                 </div>
               </div>
               <!-- Color swatch -->
-              <div style="width:24px;height:24px;border-radius:6px;background:{{ subj.color }};
-                          border:1px solid rgba(255,255,255,.1);flex-shrink:0;"></div>
+              <div style="width:24px;height:24px;border-radius:6px;background-color:{{ subj.color }};border:1px solid rgba(255,255,255,.1);flex-shrink:0;"></div>
               <!-- Actions -->
               <div class="d-flex gap-2">
-                <a href="{% url 'subject_edit' subject_id=subj.id %}" class="btn-bw-secondary" style="font-size:.75rem;padding:.3rem .6rem;">
+                <a href="{% url 'subject_edit' subject_id=subj.id %}" class="btn-bw-secondary" style="font-size:.75rem;padding:.3rem .6rem;" title="Edit">
                   <i class="bi bi-pencil"></i>
                 </a>
                 <form method="post" action="{% url 'subject_delete' subject_id=subj.id %}"
-                      onsubmit="return confirm('Delete {{ subj.name }}? This will also remove timetable entries and sessions.')">
+                      onsubmit="return confirm('Delete this subject? This will also remove associated timetable entries and sessions.');">
                   {% csrf_token %}
-                  <button type="submit" class="btn-bw-danger" style="font-size:.75rem;padding:.3rem .6rem;">
+                  <button type="submit" class="btn-bw-danger" style="font-size:.75rem;padding:.3rem .6rem;" title="Delete">
                     <i class="bi bi-trash3"></i>
                   </button>
                 </form>
