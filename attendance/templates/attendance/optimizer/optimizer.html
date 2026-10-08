@@ -1,0 +1,225 @@
+{% extends 'attendance/base.html' %}
+{% load bunkwise_tags %}
+{% block title %}Bunk Optimizer — {{ semester.name }}{% endblock %}
+
+{% block content %}
+<div class="container-xl">
+  <div class="page-header fade-up">
+    <h1>⭐ Smart Bunk Optimizer</h1>
+    <p>Plan your absences intelligently. The optimizer explains all consequences honestly.</p>
+  </div>
+
+  <div class="row g-4">
+
+    <!-- Mode selector + form -->
+    <div class="col-lg-4">
+      <div class="bw-card fade-up" style="position:sticky;top:80px;">
+        <h2 style="font-size:1rem;font-weight:700;color:#fff;margin-bottom:1.25rem;">
+          <i class="bi bi-sliders text-accent"></i> Plan Options
+        </h2>
+
+        <form method="post" id="optForm">
+          {% csrf_token %}
+
+          <!-- Mode tabs -->
+          <div class="mb-3">
+            <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+              {% for mode, label in "sessions:Select Sessions,day:Full Day Off,range:Date Range"|split:","|default:"" %}{% endfor %}
+              <button type="button" class="btn-bw-secondary mode-btn active" data-mode="sessions" style="flex:1;justify-content:center;font-size:.78rem;"
+                      onclick="setMode('sessions',this)">📋 Sessions</button>
+              <button type="button" class="btn-bw-secondary mode-btn" data-mode="day" style="flex:1;justify-content:center;font-size:.78rem;"
+                      onclick="setMode('day',this)">📅 Full Day</button>
+              <button type="button" class="btn-bw-secondary mode-btn" data-mode="range" style="flex:1;justify-content:center;font-size:.78rem;"
+                      onclick="setMode('range',this)">📆 Date Range</button>
+            </div>
+          </div>
+
+          <input type="hidden" name="mode" id="modeInput" value="sessions">
+
+          <!-- Sessions mode -->
+          <div id="panel-sessions">
+            <div style="max-height:50vh;overflow-y:auto;">
+              {% regroup days by date as days_by_date %}
+              {% for day_item in days %}
+                <div class="mb-2">
+                  <div style="font-size:.72rem;font-weight:700;color:var(--accent);text-transform:uppercase;margin-bottom:.3rem;">
+                    {{ day_item.date|date:"D, d M" }}
+                    <span style="color:var(--text-muted);font-weight:400;">
+                      ({{ day_item.total_minutes|duration_fmt }} total)
+                    </span>
+                  </div>
+                  {% for session in day_item.sessions %}
+                    <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;margin-bottom:.3rem;
+                                  padding:.4rem .6rem;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-glass);">
+                      <input type="checkbox" name="session_ids" value="{{ session.id }}" style="accent-color:var(--accent);">
+                      <span class="subject-dot" style="background:{{ session.subject.color }};"></span>
+                      <div>
+                        <div style="font-size:.8rem;color:#fff;font-weight:600;">{{ session.subject.name }}</div>
+                        <div style="font-size:.68rem;color:var(--text-muted);">
+                          {{ session.start_time|time:"H:i" }}–{{ session.end_time|time:"H:i" }}
+                        </div>
+                      </div>
+                    </label>
+                  {% endfor %}
+                </div>
+              {% empty %}
+                <p style="font-size:.8rem;color:var(--text-muted);">No future sessions.</p>
+              {% endfor %}
+            </div>
+          </div>
+
+          <!-- Day mode -->
+          <div id="panel-day" style="display:none;">
+            <label class="form-label">Select a date</label>
+            <select name="date" class="form-select">
+              {% for day_item in days %}
+                <option value="{{ day_item.date|date:'Y-m-d' }}">
+                  {{ day_item.date|date:"D, d M Y" }} ({{ day_item.sessions|length }} sessions)
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Range mode -->
+          <div id="panel-range" style="display:none;">
+            <div class="mb-2">
+              <label class="form-label">Start date</label>
+              <input type="date" name="start_date" class="form-control">
+            </div>
+            <div class="mb-2">
+              <label class="form-label">End date</label>
+              <input type="date" name="end_date" class="form-control">
+            </div>
+          </div>
+
+          <button type="submit" class="btn-bw-primary w-100 justify-content-center mt-3" style="padding:.65rem;">
+            <i class="bi bi-stars"></i> Analyze Plan
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div class="col-lg-8">
+      {% if optimizer_result %}
+        <div class="fade-up">
+
+          <!-- Summary -->
+          <div class="bw-card mb-4">
+            <div class="row g-3 text-center">
+              <div class="col-4">
+                <div style="font-size:1.75rem;font-weight:800;color:var(--accent);">
+                  {{ optimizer_result.free_hours }}h
+                </div>
+                <div style="font-size:.75rem;color:var(--text-muted);">free time gained</div>
+              </div>
+              <div class="col-4">
+                <div style="font-size:1.75rem;font-weight:800;
+                            color:{% if optimizer_result.overall_risk == 'LOW' %}var(--safe){% elif optimizer_result.overall_risk == 'MEDIUM' %}var(--caution){% else %}var(--critical){% endif %};">
+                  {{ optimizer_result.overall_risk }}
+                </div>
+                <div style="font-size:.75rem;color:var(--text-muted);">overall risk</div>
+              </div>
+              <div class="col-4">
+                <div style="font-size:1.75rem;font-weight:800;color:#fff;">
+                  {{ optimizer_result.selected|length }}
+                </div>
+                <div style="font-size:.75rem;color:var(--text-muted);">sessions affected</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recommendation banner -->
+          {% if optimizer_result.any_critical %}
+            <div class="bw-alert bw-alert-danger mb-4">
+              <i class="bi bi-x-circle-fill"></i>
+              <strong>HIGH RISK:</strong> This plan causes at least one subject to fall <strong>below the minimum required attendance</strong>.
+              This is not recommended. Skipping these sessions could result in attendance shortage.
+            </div>
+          {% elif optimizer_result.overall_risk == 'MEDIUM' %}
+            <div class="bw-alert bw-alert-warning mb-4">
+              <i class="bi bi-exclamation-triangle-fill"></i>
+              <strong>CAUTION:</strong> This plan puts some subjects in the caution zone.
+              You are above minimum but below the safety threshold.
+              Proceed carefully — any future unplanned absences could become risky.
+            </div>
+          {% else %}
+            <div class="bw-alert bw-alert-success mb-4">
+              <i class="bi bi-check-circle-fill"></i>
+              <strong>LOW RISK:</strong> This plan is safe. All affected subjects remain above the effective target including the safety buffer.
+            </div>
+          {% endif %}
+
+          <!-- Per-subject impact -->
+          <div class="bw-card">
+            <h3 style="font-size:.9rem;font-weight:700;color:var(--text-secondary);
+                        text-transform:uppercase;letter-spacing:.07em;margin-bottom:1rem;">
+              Impact Per Subject
+            </h3>
+
+            {% for subj_id, res in optimizer_result.simulation.items %}
+              <div class="subject-row mb-3">
+                <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                  <div style="font-size:.9rem;font-weight:700;color:#fff;">{{ res.subject_name }}</div>
+                  <div class="d-flex align-items-center gap-2">
+                    <span class="risk-badge risk-{{ res.current_risk }}">{{ res.current_risk }}</span>
+                    <i class="bi bi-arrow-right" style="color:var(--text-muted);font-size:.8rem;"></i>
+                    <span class="risk-badge risk-{{ res.projected_risk }}">{{ res.projected_risk }}</span>
+                  </div>
+                </div>
+                <div class="row g-2" style="font-size:.8rem;">
+                  <div class="col-4">
+                    <div style="color:var(--text-muted);">Current</div>
+                    <div style="font-weight:700;color:#fff;">{{ res.current_pct }}%</div>
+                  </div>
+                  <div class="col-4">
+                    <div style="color:var(--text-muted);">Projected</div>
+                    <div style="font-weight:700;
+                                color:{% if res.projected_risk == 'SAFE' %}var(--safe){% elif res.projected_risk == 'CAUTION' %}var(--caution){% else %}var(--critical){% endif %};">
+                      {{ res.projected_pct }}%
+                    </div>
+                  </div>
+                  <div class="col-4">
+                    <div style="color:var(--text-muted);">Safe after</div>
+                    <div style="font-weight:700;color:var(--accent);">{{ res.safe_after }}</div>
+                  </div>
+                </div>
+                <div class="att-bar-wrap mt-2">
+                  <div class="att-bar-fill {% if res.projected_risk == 'SAFE' %}safe{% elif res.projected_risk == 'CAUTION' %}caution{% else %}critical{% endif %}"
+                       style="width:{{ res.projected_pct|pct_bar_width }}%;"></div>
+                  <div class="att-bar-marker" style="left:{{ res.min_required }}%;"></div>
+                </div>
+              </div>
+            {% endfor %}
+
+          </div>
+        </div>
+
+      {% else %}
+        <div class="bw-card fade-up">
+          <div class="empty-state">
+            <div class="icon">⭐</div>
+            <p>Configure your plan on the left and click <strong>Analyze Plan</strong>.</p>
+            <p style="font-size:.75rem;margin-top:.5rem;">
+              The optimizer will show you exactly which subjects are affected and whether the plan is safe.
+            </p>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function setMode(mode, btn) {
+  document.getElementById('modeInput').value = mode;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  ['sessions','day','range'].forEach(m => {
+    document.getElementById('panel-'+m).style.display = m === mode ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

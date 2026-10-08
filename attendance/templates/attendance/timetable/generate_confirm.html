@@ -1,0 +1,61 @@
+{% extends 'attendance/base.html' %}
+{% block title %}Generate Sessions — {{ semester.name }}{% endblock %}
+
+{% block content %}
+<div class="container-xl" style="max-width:600px;">
+  <div class="page-header fade-up">
+    <h1>⚡ Generate Semester Sessions</h1>
+    <p>{{ semester.name }}</p>
+  </div>
+
+  <div class="bw-card fade-up">
+    <div class="bw-alert bw-alert-info mb-4">
+      <i class="bi bi-info-circle-fill"></i>
+      BunkWise will generate one <strong>ClassSession</strong> record for every timetable entry
+      for each week between <strong>{{ semester.start_date|date:"d M Y" }}</strong>
+      and <strong>{{ semester.end_date|date:"d M Y" }}</strong>.
+    </div>
+
+    <div class="row g-3 mb-4" style="font-size:.85rem;color:var(--text-secondary);">
+      <div class="col-6">
+        <div class="bw-card" style="padding:1rem;">
+          <div style="font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.07em;">Timetable Entries</div>
+          <div style="font-size:1.5rem;font-weight:800;color:#fff;margin-top:.25rem;">
+            {{ semester.timetable_entries.count }}
+          </div>
+        </div>
+      </div>
+      <div class="col-6">
+        <div class="bw-card" style="padding:1rem;">
+          <div style="font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.07em;">Weeks in Semester</div>
+          <div style="font-size:1.5rem;font-weight:800;color:#fff;margin-top:.25rem;">
+            ~{{ semester.total_days|divisibleby:7|yesno:"," }}{{ semester.total_days }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="d-grid gap-3">
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="generate">
+        <button type="submit" class="btn-bw-primary w-100 justify-content-center" style="padding:.7rem;">
+          <i class="bi bi-plus-circle"></i> Generate New Sessions (skip existing)
+        </button>
+      </form>
+
+      <form method="post" onsubmit="return confirm('This will DELETE all scheduled sessions and recreate them. Attended/Absent records are preserved.')">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="regenerate">
+        <button type="submit" class="btn-bw-danger w-100" style="padding:.7rem;width:100%;">
+          <i class="bi bi-arrow-repeat"></i> Regenerate All Sessions (reset scheduled)
+        </button>
+      </form>
+
+      <a href="{% url 'timetable' semester_id=semester.id %}" class="btn-bw-secondary justify-content-center">
+        <i class="bi bi-arrow-left"></i> Back to Timetable
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}

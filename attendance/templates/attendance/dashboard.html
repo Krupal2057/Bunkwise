@@ -1,0 +1,217 @@
+{% extends 'attendance/base.html' %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-xl">
+
+  <!-- ── Header ──────────────────────────────────────────────────────── -->
+  <div class="page-header fade-up">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <div>
+        <h1>📊 Dashboard</h1>
+        <p>{{ data.semester.name }} &nbsp;·&nbsp;
+           {{ data.semester.start_date|date:"d M Y" }} → {{ data.semester.end_date|date:"d M Y" }}</p>
+      </div>
+      <div class="d-flex gap-2 flex-wrap">
+        <a href="{% url 'calendar_view' semester_id=data.semester.id %}" class="btn-bw-secondary">
+          <i class="bi bi-calendar3"></i> Calendar
+        </a>
+        <a href="{% url 'attendance_overview' semester_id=data.semester.id %}" class="btn-bw-primary">
+          <i class="bi bi-check2-circle"></i> Mark Attendance
+        </a>
+      </div>
+    </div>
+
+    <!-- Semester Progress -->
+    <div class="mt-3" style="max-width:400px;">
+      <div class="d-flex justify-content-between mb-1" style="font-size:.75rem;color:var(--text-muted);">
+        <span>Semester Progress</span>
+        <span>{{ data.progress }}%</span>
+      </div>
+      <div class="progress-pill">
+        <div class="progress-fill" style="width:{{ data.progress }}%;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Stat Cards ──────────────────────────────────────────────────── -->
+  <div class="row g-3 mb-4">
+
+    <div class="col-6 col-md-4 col-lg-2 fade-up fade-up-delay-1">
+      <div class="stat-card">
+        <div class="icon icon-accent"><i class="bi bi-percent"></i></div>
+        <div class="info">
+          <div class="label">Overall</div>
+          <div class="value">{{ data.overall_pct }}%</div>
+          <div class="sub">attendance</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-6 col-md-4 col-lg-2 fade-up fade-up-delay-2">
+      <div class="stat-card">
+        <div class="icon {% if data.at_risk_count > 0 %}icon-critical{% else %}icon-safe{% endif %}">
+          <i class="bi bi-exclamation-triangle"></i>
+        </div>
+        <div class="info">
+          <div class="label">At Risk</div>
+          <div class="value">{{ data.at_risk_count }}</div>
+          <div class="sub">subject{{ data.at_risk_count|pluralize }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-6 col-md-4 col-lg-2 fade-up fade-up-delay-3">
+      <div class="stat-card">
+        <div class="icon icon-safe"><i class="bi bi-piggy-bank"></i></div>
+        <div class="info">
+          <div class="label">Bunk Budget</div>
+          <div class="value">{{ data.total_bunk_budget }}</div>
+          <div class="sub">safe absences</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-6 col-md-4 col-lg-2 fade-up fade-up-delay-4">
+      <div class="stat-card">
+        <div class="icon icon-sky"><i class="bi bi-hourglass-split"></i></div>
+        <div class="info">
+          <div class="label">Sessions Left</div>
+          <div class="value">{{ data.remaining_sessions }}</div>
+          <div class="sub">scheduled</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-6 col-md-4 col-lg-2 fade-up fade-up-delay-1">
+      <div class="stat-card">
+        <div class="icon icon-purple"><i class="bi bi-bar-chart-line"></i></div>
+        <div class="info">
+          <div class="label">Semester</div>
+          <div class="value">{{ data.progress }}%</div>
+          <div class="sub">complete</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-6 col-md-4 col-lg-2 fade-up fade-up-delay-2">
+      <div class="stat-card">
+        <div class="icon icon-accent"><i class="bi bi-book"></i></div>
+        <div class="info">
+          <div class="label">Subjects</div>
+          <div class="value">{{ data.subject_data|length }}</div>
+          <div class="sub">enrolled</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Main Content Grid ───────────────────────────────────────────── -->
+  <div class="row g-4">
+
+    <!-- Subject Attendance -->
+    <div class="col-lg-7">
+      <div class="bw-card fade-up">
+        <div class="section-header">
+          <h2><i class="bi bi-book-half text-accent"></i> Subjects</h2>
+          <a href="{% url 'bunk_budget' semester_id=data.semester.id %}" class="btn-bw-secondary" style="font-size:.75rem;padding:.3rem .7rem;">
+            Full Details →
+          </a>
+        </div>
+
+        {% for item in data.subject_data %}
+        <div class="subject-row">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <span class="subject-dot" style="background:{{ item.subject.color }};"></span>
+            <span style="font-size:.9rem;font-weight:600;color:#fff;">
+              {{ item.subject.icon }} {{ item.subject.name }}
+            </span>
+            {% if item.subject.code %}
+              <span style="font-size:.7rem;color:var(--text-muted);">{{ item.subject.code }}</span>
+            {% endif %}
+            <span class="ms-auto risk-badge risk-{{ item.risk }}">
+              {% if item.risk == 'SAFE' %}✅{% elif item.risk == 'CAUTION' %}⚠️{% else %}🚨{% endif %}
+              {{ item.risk }}
+            </span>
+          </div>
+
+          <!-- Progress bar -->
+          {% with pct=item.att.percentage target=item.att.min_required eff=item.att.effective_target %}
+          <div class="att-bar-wrap mb-1">
+            <div class="att-bar-fill {% if item.risk == 'SAFE' %}safe{% elif item.risk == 'CAUTION' %}caution{% else %}critical{% endif %}"
+                 style="width:{{ pct }}%;"></div>
+            <!-- Target marker -->
+            <div class="att-bar-marker" style="left:{{ target }}%;"></div>
+          </div>
+          <div class="d-flex justify-content-between" style="font-size:.72rem;color:var(--text-muted);">
+            <span>{{ item.att.raw_attended }}/{{ item.att.raw_conducted }} sessions &nbsp;·&nbsp; <strong style="color:var(--text-primary);">{{ pct }}%</strong></span>
+            <span>Min {{ target }}% &nbsp;|&nbsp; Budget: <strong style="color:var(--safe);">{{ item.bunk }}</strong></span>
+          </div>
+          {% endwith %}
+        </div>
+        {% empty %}
+          <div class="empty-state">
+            <div class="icon">📚</div>
+            <p>No subjects yet. <a href="{% url 'subject_list' semester_id=data.semester.id %}">Add subjects →</a></p>
+          </div>
+        {% endfor %}
+
+      </div>
+    </div>
+
+    <!-- Right column -->
+    <div class="col-lg-5">
+
+      <!-- Upcoming sessions -->
+      <div class="bw-card mb-4 fade-up">
+        <div class="section-header">
+          <h2><i class="bi bi-clock text-accent"></i> Upcoming</h2>
+        </div>
+        {% for s in data.upcoming_sessions %}
+          <div class="d-flex align-items-center gap-2 mb-2 py-1" style="border-bottom:1px solid var(--border-color);">
+            <span class="subject-dot" style="background:{{ s.subject.color }};"></span>
+            <div class="flex-grow-1">
+              <div style="font-size:.85rem;font-weight:600;color:#fff;">{{ s.subject.name }}</div>
+              <div style="font-size:.72rem;color:var(--text-muted);">
+                {{ s.date|date:"D, d M" }} &nbsp;·&nbsp; {{ s.start_time|time:"H:i" }}–{{ s.end_time|time:"H:i" }}
+              </div>
+            </div>
+            <span class="status-chip status-{{ s.status }}">{{ s.status|capfirst }}</span>
+          </div>
+        {% empty %}
+          <div class="empty-state" style="padding:1.5rem;">
+            <p>No upcoming sessions in the next 7 days.</p>
+          </div>
+        {% endfor %}
+      </div>
+
+      <!-- Quick actions -->
+      <div class="bw-card fade-up">
+        <div class="section-header">
+          <h2><i class="bi bi-lightning-charge text-accent"></i> Quick Actions</h2>
+        </div>
+        <div class="d-grid gap-2">
+          <a href="{% url 'calendar_view' semester_id=data.semester.id %}" class="btn-bw-secondary justify-content-start">
+            <i class="bi bi-calendar3"></i> Open Calendar
+          </a>
+          <a href="{% url 'simulator' semester_id=data.semester.id %}" class="btn-bw-secondary justify-content-start">
+            <i class="bi bi-play-circle"></i> What-if Simulator
+          </a>
+          <a href="{% url 'optimizer' semester_id=data.semester.id %}" class="btn-bw-secondary justify-content-start">
+            <i class="bi bi-stars"></i> Bunk Optimizer
+          </a>
+          <a href="{% url 'analytics' semester_id=data.semester.id %}" class="btn-bw-secondary justify-content-start">
+            <i class="bi bi-bar-chart-line"></i> Analytics &amp; Charts
+          </a>
+          <a href="{% url 'event_planner' semester_id=data.semester.id %}" class="btn-bw-secondary justify-content-start">
+            <i class="bi bi-calendar-event"></i> Plan an Event / Trip
+          </a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+{% endblock %}

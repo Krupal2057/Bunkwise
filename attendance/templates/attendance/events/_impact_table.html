@@ -1,0 +1,17 @@
+{% load bunkwise_tags %}
+{% for subj_id, res in impact.items %}
+  <div class="d-flex align-items-center gap-3 mb-2 py-1" style="border-bottom:1px solid var(--border-color);">
+    <div style="flex:1;font-size:.8rem;color:#fff;font-weight:600;">{{ res.subject_name }}</div>
+    <div style="font-size:.78rem;">
+      <span style="color:var(--text-muted);">{{ res.current_pct }}%</span>
+      <span style="color:var(--text-muted);margin:0 .3rem;">→</span>
+      <span style="font-weight:700;
+                   color:{% if res.projected_risk == 'SAFE' %}var(--safe){% elif res.projected_risk == 'CAUTION' %}var(--caution){% else %}var(--critical){% endif %};">
+        {{ res.projected_pct }}%
+      </span>
+    </div>
+    <span class="risk-badge risk-{{ res.projected_risk }}">{{ res.projected_risk }}</span>
+  </div>
+{% empty %}
+  <div style="font-size:.8rem;color:var(--text-muted);">No sessions affected.</div>
+{% endfor %}

@@ -1,0 +1,231 @@
+{% extends 'attendance/base.html' %}
+{% load bunkwise_tags %}
+{% block title %}Calendar — {{ month_name }} {{ year }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .cal-body { display: grid; grid-template-columns: repeat(7, 1fr); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-xl">
+
+  <div class="page-header fade-up">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <div>
+        <h1>📅 Calendar</h1>
+        <p>{{ semester.name }}</p>
+      </div>
+      <div class="d-flex gap-2 flex-wrap">
+        <a href="{% url 'special_days' semester_id=semester.id %}" class="btn-bw-secondary">
+          <i class="bi bi-star"></i> Special Days
+        </a>
+        <a href="{% url 'attendance_overview' semester_id=semester.id %}" class="btn-bw-primary">
+          <i class="bi bi-check2-circle"></i> Attendance Overview
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Month nav -->
+  <div class="d-flex align-items-center gap-3 mb-3 fade-up">
+    <a href="?year={{ prev_year }}&month={{ prev_month }}" class="btn-bw-secondary" style="padding:.4rem .8rem;">
+      <i class="bi bi-chevron-left"></i>
+    </a>
+    <h2 style="font-size:1.2rem;font-weight:700;color:#fff;margin:0;min-width:160px;text-align:center;">
+      {{ month_name }} {{ year }}
+    </h2>
+    <a href="?year={{ next_year }}&month={{ next_month }}" class="btn-bw-secondary" style="padding:.4rem .8rem;">
+      <i class="bi bi-chevron-right"></i>
+    </a>
+    <!-- Legend -->
+    <div class="ms-auto d-flex gap-3 flex-wrap" style="font-size:.72rem;">
+      <span><span class="cal-dot" style="background:var(--safe);display:inline-block;width:8px;height:8px;border-radius:50%;"></span> Present</span>
+      <span><span class="cal-dot" style="background:var(--critical);display:inline-block;width:8px;height:8px;border-radius:50%;"></span> Absent</span>
+      <span><span class="cal-dot" style="background:var(--accent);display:inline-block;width:8px;height:8px;border-radius:50%;"></span> Scheduled</span>
+      <span><span class="cal-dot" style="background:var(--caution);display:inline-block;width:8px;height:8px;border-radius:50%;"></span> Exam</span>
+      <span><span class="cal-special-badge badge-holiday">Holiday</span></span>
+    </div>
+  </div>
+
+  <!-- Calendar grid -->
+  <div class="bw-calendar fade-up fade-up-delay-1" id="bw-cal">
+
+    <!-- Day headers -->
+    <div class="cal-header">
+      {% for d in "Mon,Tue,Wed,Thu,Fri,Sat,Sun"|split:"," %}
+        <div class="cal-header-cell">{{ d }}</div>
+      {% endfor %}
+    </div>
+
+    <!-- Weeks -->
+    <div class="cal-body" id="cal-grid"></div>
+
+  </div>
+
+  <!-- Day detail modal -->
+  <div class="modal fade" id="dayModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content" style="background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:var(--radius-md);">
+        <div class="modal-header" style="border-color:var(--border-color);">
+          <h5 class="modal-title" id="dayModalTitle" style="color:#fff;font-size:1rem;"></h5>
+          <a id="dayModalLink" href="#" class="btn-bw-primary ms-auto" style="font-size:.75rem;padding:.3rem .7rem;">
+            <i class="bi bi-pencil"></i> Mark Attendance
+          </a>
+        </div>
+        <div class="modal-body" id="dayModalBody"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add special day -->
+  <div class="row mt-4">
+    <div class="col-lg-5">
+      <div class="bw-card fade-up">
+        <h2 style="font-size:1rem;font-weight:700;color:#fff;margin-bottom:1rem;">
+          <i class="bi bi-calendar-plus text-accent"></i> Add Special Day
+        </h2>
+        <form method="post" novalidate>
+          {% csrf_token %}
+          {% for field in special_form %}
+            <div class="mb-3">
+              <label class="form-label">{{ field.label }}</label>
+              {{ field }}
+              {% if field.errors %}
+                <div style="font-size:.75rem;color:var(--critical);">{{ field.errors.0 }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+          <button type="submit" class="btn-bw-primary w-100 justify-content-center">
+            <i class="bi bi-plus"></i> Add Special Day
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── Calendar data from Django ────────────────────────────────────────────────
+const CAL_DATA   = {{ calendar_data|safe }};
+const TODAY      = "{{ today }}";
+const SEMESTER_ID = "{{ semester.id }}";
+const YEAR       = {{ year }};
+const MONTH      = {{ month }};
+
+// ── Status → color map ───────────────────────────────────────────────────────
+const STATUS_COLORS = {
+  present:   '#22c55e',
+  absent:    '#ef4444',
+  cancelled: '#64748b',
+  holiday:   '#ef4444',
+  exam:      '#f59e0b',
+  event:     '#818cf8',
+  scheduled: '#818cf8',
+  modified:  '#c084fc',
+};
+
+const STATUS_LABELS = {
+  present:   '✅ Present',
+  absent:    '❌ Absent',
+  cancelled: '🚫 Cancelled',
+  holiday:   '🏖️ Holiday',
+  exam:      '📝 Exam',
+  event:     '🎉 Event',
+  scheduled: '📅 Scheduled',
+  modified:  '🔄 Modified',
+};
+
+// ── Build calendar grid ──────────────────────────────────────────────────────
+const matrix = {{ month_matrix|safe }};
+const grid   = document.getElementById('cal-grid');
+
+matrix.forEach(week => {
+  week.forEach(day => {
+    const cell = document.createElement('div');
+    cell.classList.add('cal-day');
+
+    if (day === 0) {
+      cell.classList.add('other-month');
+      grid.appendChild(cell);
+      return;
+    }
+
+    const dateStr = `${YEAR}-${String(MONTH).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const data    = CAL_DATA[dateStr] || { sessions: [], special: null };
+
+    if (dateStr === TODAY) cell.classList.add('today');
+
+    let html = `<div class="cal-date">${day}</div>`;
+
+    // Special day badge
+    if (data.special) {
+      const t = data.special.type;
+      html += `<div class="cal-special-badge badge-${t}">${data.special.name}</div>`;
+    }
+
+    // Session dots
+    if (data.sessions.length > 0) {
+      html += '<div class="cal-dots mt-1">';
+      data.sessions.forEach(s => {
+        const col = s.color || STATUS_COLORS[s.status] || '#818cf8';
+        html += `<span class="cal-dot" title="${s.subject}: ${s.start}–${s.end}" style="background:${col};"></span>`;
+      });
+      html += '</div>';
+    }
+
+    cell.innerHTML = html;
+
+    // Click → open modal
+    cell.style.cursor = 'pointer';
+    cell.addEventListener('click', () => openDayModal(dateStr, day, data));
+
+    grid.appendChild(cell);
+  });
+});
+
+// ── Day modal ────────────────────────────────────────────────────────────────
+function openDayModal(dateStr, day, data) {
+  const modal = new bootstrap.Modal(document.getElementById('dayModal'));
+  document.getElementById('dayModalTitle').textContent =
+    `${String(day).padStart(2,'0')} ${new Date(dateStr + 'T00:00').toLocaleDateString('en-IN', {month:'long', year:'numeric'})}`;
+  document.getElementById('dayModalLink').href =
+    `/semester/${SEMESTER_ID}/day/${dateStr}/`;
+
+  let body = '';
+  if (data.special) {
+    body += `<div class="bw-alert bw-alert-${data.special.type === 'holiday' ? 'danger' : 'info'} mb-3">
+               ${data.special.type === 'holiday' ? '🏖️' : data.special.type === 'exam' ? '📝' : '🎉'}
+               <strong>${data.special.name}</strong>
+             </div>`;
+  }
+
+  if (data.sessions.length === 0) {
+    body += '<p style="color:var(--text-muted);font-size:.85rem;">No sessions scheduled.</p>';
+  } else {
+    data.sessions.forEach(s => {
+      const col = STATUS_COLORS[s.status] || '#818cf8';
+      body += `<div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;
+                            padding:.6rem;background:var(--bg-glass);border-radius:8px;
+                            border-left:3px solid ${s.color || col};">
+        <div style="flex:1;">
+          <div style="font-size:.85rem;font-weight:600;color:#fff;">${s.subject}</div>
+          <div style="font-size:.72rem;color:var(--text-muted);">${s.start}–${s.end} · ${s.duration}min</div>
+        </div>
+        <span style="font-size:.7rem;font-weight:700;padding:.2rem .6rem;border-radius:50px;
+                     background:${col}22;color:${col};border:1px solid ${col}44;">
+          ${STATUS_LABELS[s.status] || s.status}
+        </span>
+      </div>`;
+    });
+  }
+
+  document.getElementById('dayModalBody').innerHTML = body;
+  modal.show();
+}
+</script>
+{% endblock %}

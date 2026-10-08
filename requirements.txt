@@ -1,0 +1,6 @@
+django==6.1.2
+django-environ==0.14.0
+pillow==12.3.0
+pandas==3.0.6
+matplotlib==3.11.2
+numpy==2.5.3

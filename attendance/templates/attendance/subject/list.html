@@ -1,0 +1,118 @@
+{% extends 'attendance/base.html' %}
+{% block title %}Subjects — {{ semester.name }}{% endblock %}
+
+{% block content %}
+<div class="container-xl">
+  <div class="page-header fade-up">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <div>
+        <h1>📚 Subjects</h1>
+        <p>{{ semester.name }}</p>
+      </div>
+      <a href="{% url 'timetable' semester_id=semester.id %}" class="btn-bw-primary">
+        <i class="bi bi-table"></i> Go to Timetable →
+      </a>
+    </div>
+  </div>
+
+  <div class="row g-4">
+
+    <!-- Add subject form -->
+    <div class="col-lg-4">
+      <div class="bw-card fade-up" style="position:sticky;top:80px;">
+        <h2 style="font-size:1rem;font-weight:700;color:#fff;margin-bottom:1.25rem;">
+          <i class="bi bi-plus-circle text-accent"></i> Add Subject
+        </h2>
+        <form method="post" novalidate>
+          {% csrf_token %}
+          {% for field in form %}
+            <div class="mb-3">
+              <label class="form-label">{{ field.label }}</label>
+              {% if field.name == 'color' %}
+                <div class="d-flex gap-2 align-items-center">
+                  {{ field }}
+                  <span style="font-size:.75rem;color:var(--text-muted);">Pick a color for the calendar</span>
+                </div>
+              {% else %}
+                {{ field }}
+              {% endif %}
+              {% if field.help_text %}
+                <div style="font-size:.72rem;color:var(--text-muted);margin-top:.2rem;">{{ field.help_text }}</div>
+              {% endif %}
+              {% if field.errors %}
+                <div style="font-size:.75rem;color:var(--critical);">{{ field.errors.0 }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+          <button type="submit" class="btn-bw-primary w-100 justify-content-center">
+            <i class="bi bi-plus"></i> Add Subject
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Subject list -->
+    <div class="col-lg-8">
+      <div class="bw-card fade-up fade-up-delay-1">
+        <div class="section-header">
+          <h2><i class="bi bi-book text-accent"></i> {{ subjects|length }} Subject{{ subjects|length|pluralize }}</h2>
+        </div>
+
+        {% for subj in subjects %}
+          <div class="subject-row">
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+              <span style="font-size:1.4rem;">{{ subj.icon }}</span>
+              <div class="flex-grow-1">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                  <span style="font-size:.95rem;font-weight:700;color:#fff;">{{ subj.name }}</span>
+                  {% if subj.code %}
+                    <span style="font-size:.72rem;color:var(--text-muted);background:var(--bg-glass);
+                                 padding:.1rem .4rem;border-radius:4px;border:1px solid var(--border-color);">
+                      {{ subj.code }}
+                    </span>
+                  {% endif %}
+                  <span class="status-chip"
+                        style="background:rgba(255,255,255,.06);color:var(--text-secondary);border:1px solid var(--border-color);">
+                    {{ subj.get_subject_type_display }}
+                  </span>
+                </div>
+                <div style="font-size:.75rem;color:var(--text-muted);margin-top:.2rem;">
+                  Min attendance:
+                  {% if subj.min_attendance %}
+                    <strong style="color:var(--accent-light);">{{ subj.min_attendance }}%</strong>
+                  {% else %}
+                    <span>{{ semester.min_attendance }}% (semester default)</span>
+                  {% endif %}
+                </div>
+              </div>
+              <!-- Color swatch -->
+              <div style="width:24px;height:24px;border-radius:6px;background:{{ subj.color }};
+                          border:1px solid rgba(255,255,255,.1);flex-shrink:0;"></div>
+              <!-- Actions -->
+              <div class="d-flex gap-2">
+                <a href="{% url 'subject_edit' subject_id=subj.id %}" class="btn-bw-secondary" style="font-size:.75rem;padding:.3rem .6rem;">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <form method="post" action="{% url 'subject_delete' subject_id=subj.id %}"
+                      onsubmit="return confirm('Delete {{ subj.name }}? This will also remove timetable entries and sessions.')">
+                  {% csrf_token %}
+                  <button type="submit" class="btn-bw-danger" style="font-size:.75rem;padding:.3rem .6rem;">
+                    <i class="bi bi-trash3"></i>
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        {% empty %}
+          <div class="empty-state">
+            <div class="icon">📚</div>
+            <p>No subjects added yet. Use the form to add your first subject.</p>
+          </div>
+        {% endfor %}
+
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

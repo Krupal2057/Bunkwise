@@ -1,0 +1,122 @@
+{% extends 'attendance/base.html' %}
+{% load bunkwise_tags %}
+{% block title %}Attendance — {{ semester.name }}{% endblock %}
+
+{% block content %}
+<div class="container-xl">
+  <div class="page-header fade-up">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <div>
+        <h1>✅ Attendance Overview</h1>
+        <p>{{ semester.name }} &nbsp;·&nbsp; {{ semester.get_attendance_policy_display }}</p>
+      </div>
+      <a href="{% url 'bunk_budget' semester_id=semester.id %}" class="btn-bw-primary">
+        <i class="bi bi-piggy-bank"></i> Bunk Budget
+      </a>
+    </div>
+  </div>
+
+  {% if not subject_data %}
+    <div class="bw-card">
+      <div class="empty-state">
+        <div class="icon">📊</div>
+        <p>No subjects found. <a href="{% url 'subject_list' semester_id=semester.id %}">Add subjects</a> and <a href="{% url 'generate_sessions' semester_id=semester.id %}">generate sessions</a> first.</p>
+      </div>
+    </div>
+  {% else %}
+    <div class="row g-4">
+      {% for item in subject_data %}
+        <div class="col-lg-6 fade-up">
+          <div class="bw-card h-100">
+
+            <!-- Header -->
+            <div class="d-flex align-items-center gap-2 mb-3">
+              <span class="subject-dot" style="background:{{ item.subject.color }};"></span>
+              <div class="flex-grow-1">
+                <div style="font-size:.95rem;font-weight:700;color:#fff;">
+                  {{ item.subject.icon }} {{ item.subject.name }}
+                </div>
+                <div style="font-size:.72rem;color:var(--text-muted);">
+                  {{ item.subject.code }} &nbsp;·&nbsp; {{ item.subject.get_subject_type_display }}
+                </div>
+              </div>
+              <span class="risk-badge risk-{{ item.risk }}">
+                {{ item.risk|risk_icon }} {{ item.risk }}
+              </span>
+            </div>
+
+            <!-- Progress bar -->
+            {% with pct=item.att.percentage target=item.att.min_required %}
+            <div class="att-bar-wrap mb-2" style="height:10px;">
+              <div class="att-bar-fill {% if item.risk == 'SAFE' %}safe{% elif item.risk == 'CAUTION' %}caution{% else %}critical{% endif %}"
+                   style="width:{{ pct|pct_bar_width }}%;"></div>
+              <div class="att-bar-marker" style="left:{{ target }}%;"></div>
+            </div>
+            <div class="d-flex justify-content-between mb-3" style="font-size:.72rem;color:var(--text-muted);">
+              <span>Target: {{ target }}%</span>
+              <span style="color:{% if item.risk == 'SAFE' %}var(--safe){% elif item.risk == 'CAUTION' %}var(--caution){% else %}var(--critical){% endif %};font-weight:700;">
+                {{ pct }}%
+              </span>
+            </div>
+            {% endwith %}
+
+            <!-- Stats grid -->
+            <div class="row g-2 mb-3" style="font-size:.8rem;">
+              <div class="col-4 text-center">
+                <div style="font-size:1.2rem;font-weight:800;color:#fff;">{{ item.att.raw_conducted }}</div>
+                <div style="color:var(--text-muted);">Conducted</div>
+              </div>
+              <div class="col-4 text-center">
+                <div style="font-size:1.2rem;font-weight:800;color:var(--safe);">{{ item.att.raw_attended }}</div>
+                <div style="color:var(--text-muted);">Attended</div>
+              </div>
+              <div class="col-4 text-center">
+                <div style="font-size:1.2rem;font-weight:800;color:var(--critical);">{{ item.att.raw_absent }}</div>
+                <div style="color:var(--text-muted);">Absent</div>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- Bunk budget & recovery -->
+            <div class="row g-2" style="font-size:.8rem;">
+              <div class="col-6">
+                <div style="color:var(--text-muted);">Safe absences left</div>
+                <div style="font-weight:700;color:{% if item.bunk > 0 %}var(--safe){% else %}var(--critical){% endif %};">
+                  {{ item.bunk }} session{{ item.bunk|pluralize }}
+                </div>
+              </div>
+              <div class="col-6">
+                {% if item.recovery and item.recovery > 0 %}
+                  <div style="color:var(--text-muted);">Recovery needed</div>
+                  <div style="font-weight:700;color:var(--critical);">
+                    Attend next {{ item.recovery }} sessions
+                  </div>
+                {% else %}
+                  <div style="color:var(--text-muted);">Future sessions</div>
+                  <div style="font-weight:700;color:var(--accent);">{{ item.future }} remaining</div>
+                {% endif %}
+              </div>
+            </div>
+
+            <!-- Explanatory note -->
+            <div class="mt-3" style="font-size:.72rem;color:var(--text-muted);background:var(--bg-glass);
+                                      padding:.6rem;border-radius:var(--radius-sm);border:1px solid var(--border-color);">
+              {% if item.bunk > 0 %}
+                ℹ️ You can miss up to <strong>{{ item.bunk }}</strong> more session{{ item.bunk|pluralize }}
+                of this subject while staying above {{ item.att.min_required }}%, assuming no other absences.
+              {% elif item.recovery and item.recovery > 0 %}
+                ⚠️ You need to attend the next <strong>{{ item.recovery }}</strong> session{{ item.recovery|pluralize }}
+                without any absence to recover to {{ item.att.min_required }}%.
+              {% else %}
+                ✅ You are exactly at the required attendance.
+              {% endif %}
+            </div>
+
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

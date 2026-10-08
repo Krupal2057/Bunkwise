@@ -1,0 +1,181 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="BunkWise — Smart Semester Attendance & Bunk Planner for students" />
+  <title>{% block title %}BunkWise{% endblock %} — Smart Attendance Planner</title>
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <!-- Google Fonts: Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- BunkWise CSS -->
+  <link href="{% static 'attendance/css/bunkwise.css' %}" rel="stylesheet">
+
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+  <!-- ── Navbar ──────────────────────────────────────────────────────── -->
+  <nav class="bw-navbar navbar navbar-expand-lg">
+    <div class="container-xl">
+
+      <a class="navbar-brand" href="{% url 'dashboard' %}">
+        🎓 Bunk<span class="accent">Wise</span>
+      </a>
+
+      <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navMain">
+        <i class="bi bi-list text-light fs-4"></i>
+      </button>
+
+      <div class="collapse navbar-collapse" id="navMain">
+
+        {% if user.is_authenticated %}
+          {% with active_sem=request.session.active_semester_id %}
+
+          <ul class="navbar-nav me-auto gap-1">
+            <li class="nav-item">
+              <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"
+                 href="{% url 'dashboard' %}">
+                <i class="bi bi-speedometer2"></i><span> Dashboard</span>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link {% if 'calendar' in request.resolver_match.url_name %}active{% endif %}"
+                 href="{% if semester_id %}{% url 'calendar_view' semester_id=semester_id %}{% else %}{% url 'semester_setup' %}{% endif %}">
+                <i class="bi bi-calendar3"></i><span> Calendar</span>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link {% if 'attendance' in request.resolver_match.url_name %}active{% endif %}"
+                 href="{% if semester_id %}{% url 'attendance_overview' semester_id=semester_id %}{% else %}{% url 'semester_setup' %}{% endif %}">
+                <i class="bi bi-check2-circle"></i><span> Attendance</span>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link {% if 'bunk' in request.resolver_match.url_name %}active{% endif %}"
+                 href="{% if semester_id %}{% url 'bunk_budget' semester_id=semester_id %}{% else %}{% url 'semester_setup' %}{% endif %}">
+                <i class="bi bi-piggy-bank"></i><span> Bunk Budget</span>
+              </a>
+            </li>
+
+            <!-- Planner dropdown -->
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                <i class="bi bi-magic"></i><span> Planner</span>
+              </a>
+              <ul class="dropdown-menu dropdown-menu-dark border-0"
+                  style="background:#1a1a2e; border:1px solid rgba(129,140,248,0.2)!important;">
+                {% if semester_id %}
+                  <li><a class="dropdown-item" href="{% url 'simulator' semester_id=semester_id %}">
+                    <i class="bi bi-play-circle me-2 text-accent"></i>What-if Simulator</a></li>
+                  <li><a class="dropdown-item" href="{% url 'optimizer' semester_id=semester_id %}">
+                    <i class="bi bi-stars me-2 text-accent"></i>Bunk Optimizer</a></li>
+                  <li><a class="dropdown-item" href="{% url 'event_planner' semester_id=semester_id %}">
+                    <i class="bi bi-calendar-event me-2 text-accent"></i>Event Planner</a></li>
+                  <li><a class="dropdown-item" href="{% url 'bridge_days' semester_id=semester_id %}">
+                    <i class="bi bi-diagram-3 me-2 text-accent"></i>Bridge Days</a></li>
+                {% else %}
+                  <li><span class="dropdown-item text-muted">Set up a semester first</span></li>
+                {% endif %}
+              </ul>
+            </li>
+
+            <!-- Setup dropdown -->
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                <i class="bi bi-gear"></i><span> Setup</span>
+              </a>
+              <ul class="dropdown-menu dropdown-menu-dark border-0"
+                  style="background:#1a1a2e; border:1px solid rgba(129,140,248,0.2)!important;">
+                <li><a class="dropdown-item" href="{% url 'semester_setup' %}">
+                  <i class="bi bi-mortarboard me-2"></i>Semesters</a></li>
+                {% if semester_id %}
+                  <li><a class="dropdown-item" href="{% url 'subject_list' semester_id=semester_id %}">
+                    <i class="bi bi-book me-2"></i>Subjects</a></li>
+                  <li><a class="dropdown-item" href="{% url 'timetable' semester_id=semester_id %}">
+                    <i class="bi bi-table me-2"></i>Timetable</a></li>
+                  <li><a class="dropdown-item" href="{% url 'special_days' semester_id=semester_id %}">
+                    <i class="bi bi-star me-2"></i>Special Days</a></li>
+                  <li><hr class="dropdown-divider" style="border-color:rgba(129,140,248,0.15)"></li>
+                  <li><a class="dropdown-item" href="{% url 'analytics' semester_id=semester_id %}">
+                    <i class="bi bi-bar-chart-line me-2"></i>Analytics</a></li>
+                {% endif %}
+              </ul>
+            </li>
+          </ul>
+
+          {% endwith %}
+
+          <ul class="navbar-nav ms-auto align-items-center gap-2">
+            <li class="nav-item">
+              <span class="nav-link text-muted" style="font-size:0.8rem; cursor:default;">
+                <i class="bi bi-person-circle me-1"></i>{{ user.get_full_name|default:user.username }}
+              </span>
+            </li>
+            <li class="nav-item">
+              <a href="{% url 'logout' %}" class="btn-bw-secondary py-1 px-3" style="font-size:0.8rem;">
+                <i class="bi bi-box-arrow-right"></i> Logout
+              </a>
+            </li>
+          </ul>
+
+        {% else %}
+          <ul class="navbar-nav ms-auto gap-2">
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'login' %}"><i class="bi bi-box-arrow-in-right"></i> Login</a>
+            </li>
+            <li class="nav-item">
+              <a class="btn-bw-primary py-1 px-3 nav-link" href="{% url 'register' %}">
+                <i class="bi bi-person-plus"></i> Register
+              </a>
+            </li>
+          </ul>
+        {% endif %}
+
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── Flash messages ──────────────────────────────────────────────── -->
+  {% if messages %}
+    <div class="container-xl pt-3">
+      {% for msg in messages %}
+        <div class="bw-alert bw-alert-{{ msg.tags|default:'info' }} mb-2 fade-up" role="alert">
+          {% if msg.tags == 'success' %}<i class="bi bi-check-circle-fill"></i>
+          {% elif msg.tags == 'warning' %}<i class="bi bi-exclamation-triangle-fill"></i>
+          {% elif msg.tags == 'error' or msg.tags == 'danger' %}<i class="bi bi-x-circle-fill"></i>
+          {% else %}<i class="bi bi-info-circle-fill"></i>{% endif %}
+          {{ msg }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <!-- ── Page content ────────────────────────────────────────────────── -->
+  <main class="bw-page">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- ── Footer ─────────────────────────────────────────────────────── -->
+  <footer style="border-top:1px solid rgba(129,140,248,0.1); padding:1.25rem 0; text-align:center;
+                 color:var(--text-muted); font-size:0.75rem;">
+    BunkWise &copy; 2026 &nbsp;·&nbsp; Built with Django + Bootstrap + Pandas + Matplotlib
+    &nbsp;·&nbsp; <a href="https://github.com/Krupal2057" target="_blank" style="color:var(--accent-light);">
+      <i class="bi bi-github"></i> GitHub
+    </a>
+  </footer>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- jQuery (optional, loaded for calendar interactions) -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+  {% block extra_js %}{% endblock %}
+
+</body>
+</html>

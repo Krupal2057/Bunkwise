@@ -1,0 +1,100 @@
+{% extends 'attendance/base.html' %}
+{% load bunkwise_tags %}
+{% block title %}Bridge Days — {{ semester.name }}{% endblock %}
+
+{% block content %}
+<div class="container-xl">
+  <div class="page-header fade-up">
+    <h1>🌉 Bridge Day Planner</h1>
+    <p>Working days sandwiched between holidays or weekends — potential long weekends.</p>
+  </div>
+
+  <div class="bw-alert bw-alert-info mb-4 fade-up">
+    <i class="bi bi-info-circle-fill"></i>
+    A bridge day is a working day with a holiday or weekend on <strong>both sides</strong>.
+    BunkWise shows the attendance impact if you choose to be absent — but does NOT recommend bunking.
+  </div>
+
+  {% if bridges %}
+    {% for bridge in bridges %}
+      <div class="bw-card mb-3 fade-up">
+        <div class="d-flex align-items-center justify-content-between gap-2 mb-3 flex-wrap">
+          <div>
+            <div style="font-size:1rem;font-weight:700;color:#fff;">
+              🌉 {{ bridge.date|date:"l, d F Y" }}
+            </div>
+            <div style="font-size:.75rem;color:var(--text-muted);">
+              {{ bridge.sessions|length }} scheduled session{{ bridge.sessions|length|pluralize }}
+            </div>
+          </div>
+          <a href="{% url 'day_detail' semester_id=semester.id date_str=bridge.date|date:'Y-m-d' %}"
+             class="btn-bw-secondary" style="font-size:.78rem;">
+            <i class="bi bi-pencil"></i> Mark Attendance
+          </a>
+        </div>
+
+        <!-- Sessions on this day -->
+        <div class="mb-3">
+          {% for session in bridge.sessions %}
+            <div class="d-flex align-items-center gap-2 mb-1" style="font-size:.8rem;">
+              <span class="subject-dot" style="background:{{ session.subject.color }};"></span>
+              <span style="color:#fff;font-weight:600;">{{ session.subject.name }}</span>
+              <span style="color:var(--text-muted);">
+                {{ session.start_time|time:"H:i" }}–{{ session.end_time|time:"H:i" }}
+                &nbsp;·&nbsp; {{ session.duration_minutes|duration_fmt }}
+              </span>
+            </div>
+          {% endfor %}
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Impact analysis -->
+        <div style="font-size:.8rem;color:var(--text-secondary);margin-bottom:.75rem;">
+          <strong>If you take this day off:</strong>
+        </div>
+
+        {% if bridge.impact %}
+          {% with all_safe=True %}
+            {% for sid, res in bridge.impact.items %}
+              {% if res.projected_risk != 'SAFE' %}{% with all_safe=False %}{% endwith %}{% endif %}
+            {% endfor %}
+          {% endwith %}
+
+          {% include 'attendance/events/_impact_table.html' with impact=bridge.impact %}
+
+          <!-- Verdict -->
+          <div class="mt-2" style="font-size:.75rem;">
+            {% for sid, res in bridge.impact.items %}
+              {% if res.projected_risk == 'CRITICAL' %}
+                <div class="bw-alert bw-alert-danger mt-2">
+                  <i class="bi bi-x-circle-fill"></i>
+                  Taking this bridge day off would put <strong>{{ res.subject_name }}</strong> below the minimum
+                  required attendance ({{ res.projected_pct }}% → min {{ res.min_required }}%). <strong>Not recommended.</strong>
+                </div>
+                {% endif %}
+            {% endfor %}
+          </div>
+        {% else %}
+          <div style="font-size:.8rem;color:var(--text-muted);">
+            Skipping this day has no impact on any subject's attendance (no marked subjects).
+          </div>
+        {% endif %}
+
+      </div>
+    {% endfor %}
+
+  {% else %}
+    <div class="bw-card">
+      <div class="empty-state">
+        <div class="icon">🌉</div>
+        <p>No bridge days found in the remaining semester.</p>
+        <p style="font-size:.75rem;margin-top:.5rem;">
+          Bridge days appear when a working day is surrounded by holidays or weekends.
+          Add holidays via <a href="{% url 'special_days' semester_id=semester.id %}">Special Days</a>.
+        </p>
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

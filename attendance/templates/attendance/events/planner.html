@@ -1,0 +1,104 @@
+{% extends 'attendance/base.html' %}
+{% load bunkwise_tags %}
+{% block title %}Event Planner — {{ semester.name }}{% endblock %}
+
+{% block content %}
+<div class="container-xl">
+  <div class="page-header fade-up">
+    <h1>🗺️ Event Planner</h1>
+    <p>Plan trips, medical appointments, or any personal event and see the attendance impact.</p>
+  </div>
+
+  <div class="row g-4">
+
+    <!-- Add event form -->
+    <div class="col-lg-4">
+      <div class="bw-card fade-up" style="position:sticky;top:80px;">
+        <h2 style="font-size:1rem;font-weight:700;color:#fff;margin-bottom:1.25rem;">
+          <i class="bi bi-plus-circle text-accent"></i> Add Event
+        </h2>
+        <form method="post" novalidate>
+          {% csrf_token %}
+          {% for field in form %}
+            <div class="mb-3">
+              <label class="form-label">{{ field.label }}</label>
+              {{ field }}
+              {% if field.errors %}
+                <div style="font-size:.75rem;color:var(--critical);">{{ field.errors.0 }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+          {% if form.non_field_errors %}
+            <div class="bw-alert bw-alert-danger mb-2">{{ form.non_field_errors.0 }}</div>
+          {% endif %}
+          <button type="submit" class="btn-bw-primary w-100 justify-content-center">
+            <i class="bi bi-plus"></i> Add &amp; Simulate Impact
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Event list with impact -->
+    <div class="col-lg-8">
+
+      {% if new_event %}
+        <!-- Newly added event impact -->
+        <div class="bw-card mb-4 fade-up" style="border-color:var(--accent);">
+          <div class="section-header">
+            <h2><i class="bi bi-calendar-event text-accent"></i> Impact: {{ new_event.name }}</h2>
+            <span style="font-size:.75rem;color:var(--text-muted);">
+              {{ new_event.start_date|date:"d M" }} → {{ new_event.end_date|date:"d M Y" }}
+              &nbsp;·&nbsp; {{ free_hours }}h free
+            </span>
+          </div>
+          {% include 'attendance/events/_impact_table.html' with impact=impact %}
+        </div>
+      {% endif %}
+
+      {% for ei in event_impacts %}
+        <div class="bw-card mb-3 fade-up">
+          <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+            <div>
+              <div style="font-size:.95rem;font-weight:700;color:#fff;">
+                {% if ei.event.event_type == 'trip' %}✈️
+                {% elif ei.event.event_type == 'medical' %}🏥
+                {% elif ei.event.event_type == 'family' %}👨‍👩‍👧
+                {% else %}📅{% endif %}
+                {{ ei.event.name }}
+              </div>
+              <div style="font-size:.72rem;color:var(--text-muted);">
+                {{ ei.event.start_date|date:"d M Y" }} → {{ ei.event.end_date|date:"d M Y" }}
+                &nbsp;·&nbsp; {{ ei.event.duration_days }} day{{ ei.event.duration_days|pluralize }}
+                &nbsp;·&nbsp; {{ ei.event.get_event_type_display }}
+              </div>
+            </div>
+            <form method="post" action="{% url 'event_delete' event_id=ei.event.id %}"
+                  onsubmit="return confirm('Remove this event?')">
+              {% csrf_token %}
+              <button type="submit" class="btn-bw-danger" style="font-size:.75rem;padding:.3rem .6rem;">
+                <i class="bi bi-trash3"></i>
+              </button>
+            </form>
+          </div>
+
+          {% if ei.impact %}
+            {% include 'attendance/events/_impact_table.html' with impact=ei.impact %}
+          {% else %}
+            <div style="font-size:.8rem;color:var(--text-muted);">No scheduled sessions during this event period.</div>
+          {% endif %}
+        </div>
+      {% empty %}
+        {% if not new_event %}
+          <div class="bw-card">
+            <div class="empty-state">
+              <div class="icon">🗺️</div>
+              <p>No events planned yet. Add a trip, appointment, or event to see attendance impact.</p>
+            </div>
+          </div>
+        {% endif %}
+      {% endfor %}
+
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,104 @@
+{% extends 'attendance/base.html' %}
+{% load bunkwise_tags %}
+{% block title %}Timetable — {{ semester.name }}{% endblock %}
+
+{% block content %}
+<div class="container-xl">
+  <div class="page-header fade-up">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <div>
+        <h1>🗓️ Weekly Timetable</h1>
+        <p>{{ semester.name }} &nbsp;·&nbsp; {{ semester.get_attendance_policy_display }}</p>
+      </div>
+      <div class="d-flex gap-2">
+        <a href="{% url 'generate_sessions' semester_id=semester.id %}" class="btn-bw-primary">
+          <i class="bi bi-lightning-charge"></i> Generate Sessions
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+
+    <!-- Add entry form -->
+    <div class="col-lg-4">
+      <div class="bw-card fade-up" style="position:sticky;top:80px;">
+        <h2 style="font-size:1rem;font-weight:700;color:#fff;margin-bottom:1.25rem;">
+          <i class="bi bi-plus-circle text-accent"></i> Add Entry
+        </h2>
+        <form method="post" novalidate>
+          {% csrf_token %}
+          {% for field in form %}
+            <div class="mb-3">
+              <label class="form-label">{{ field.label }}</label>
+              {{ field }}
+              {% if field.errors %}
+                <div style="font-size:.75rem;color:var(--critical);">{{ field.errors.0 }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+          {% if form.non_field_errors %}
+            <div class="bw-alert bw-alert-danger mb-2">{{ form.non_field_errors.0 }}</div>
+          {% endif %}
+          <button type="submit" class="btn-bw-primary w-100 justify-content-center">
+            <i class="bi bi-plus"></i> Add to Timetable
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Timetable grid -->
+    <div class="col-lg-8">
+      <div class="bw-card fade-up fade-up-delay-1">
+        <h2 style="font-size:1rem;font-weight:700;color:#fff;margin-bottom:1.5rem;">
+          <i class="bi bi-table text-accent"></i> Weekly Schedule
+        </h2>
+
+        {% for dow in "0123456" %}
+          {% with dow_int=forloop.counter0 name=day_names|index:forloop.counter0 entries=days|dict_key:forloop.counter0 %}
+          <div class="mb-3">
+            <div class="tt-day-header">
+              {{ name }}
+              {% if entries %}
+                <span style="font-weight:400;font-size:.65rem;margin-left:.5rem;">{{ entries|length }} session{{ entries|length|pluralize }}</span>
+              {% endif %}
+            </div>
+
+            {% for entry in entries %}
+              <div class="tt-entry" style="border-left-color:{{ entry.subject.color }};">
+                <div class="d-flex align-items-center justify-content-between gap-2">
+                  <div>
+                    <div class="time">
+                      {{ entry.start_time|time:"H:i" }} – {{ entry.end_time|time:"H:i" }}
+                      &nbsp;·&nbsp; {{ entry.duration_minutes }}min
+                      {% if semester.attendance_policy == 'period' %}
+                        &nbsp;·&nbsp; weight: {{ entry.attendance_weight }}
+                      {% endif %}
+                    </div>
+                    <div class="subj">{{ entry.subject.icon }} {{ entry.subject.name }}</div>
+                    {% if entry.room %}
+                      <div class="room"><i class="bi bi-geo-alt"></i> {{ entry.room }}</div>
+                    {% endif %}
+                  </div>
+                  <form method="post" action="{% url 'timetable_entry_delete' entry_id=entry.id %}"
+                        onsubmit="return confirm('Remove this entry?')">
+                    {% csrf_token %}
+                    <button type="submit" class="btn-bw-danger" style="font-size:.7rem;padding:.25rem .5rem;">
+                      <i class="bi bi-trash3"></i>
+                    </button>
+                  </form>
+                </div>
+              </div>
+            {% empty %}
+              <div style="font-size:.78rem;color:var(--text-muted);padding:.5rem 0;">No classes scheduled</div>
+            {% endfor %}
+          </div>
+          {% endwith %}
+        {% endfor %}
+
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

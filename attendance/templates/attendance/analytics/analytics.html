@@ -1,0 +1,94 @@
+{% extends 'attendance/base.html' %}
+{% load bunkwise_tags %}
+{% block title %}Analytics — {{ semester.name }}{% endblock %}
+
+{% block content %}
+<div class="container-xl">
+  <div class="page-header fade-up">
+    <h1>📈 Analytics &amp; Charts</h1>
+    <p>{{ semester.name }} &nbsp;·&nbsp; Powered by Pandas + Matplotlib</p>
+  </div>
+
+  {% if charts %}
+
+  <!-- Charts carousel -->
+  <div class="row g-4">
+
+    {% if charts.bar %}
+    <div class="col-12 fade-up">
+      <div class="bw-card">
+        <div class="section-header">
+          <h2><i class="bi bi-bar-chart text-accent"></i> Subject-wise Attendance</h2>
+        </div>
+        <img src="data:image/png;base64,{{ charts.bar }}"
+             alt="Subject-wise attendance bar chart"
+             style="width:100%;border-radius:var(--radius-sm);max-height:280px;object-fit:contain;">
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="col-lg-6 fade-up fade-up-delay-1">
+      {% if charts.stacked %}
+      <div class="bw-card h-100">
+        <div class="section-header">
+          <h2><i class="bi bi-bar-chart-steps text-accent"></i> Present vs Absent</h2>
+        </div>
+        <img src="data:image/png;base64,{{ charts.stacked }}"
+             alt="Present vs absent stacked bar chart"
+             style="width:100%;border-radius:var(--radius-sm);">
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="col-lg-6 fade-up fade-up-delay-2">
+      {% if charts.horizontal %}
+      <div class="bw-card h-100">
+        <div class="section-header">
+          <h2><i class="bi bi-arrows-angle-contract text-accent"></i> Attendance vs Target</h2>
+        </div>
+        <img src="data:image/png;base64,{{ charts.horizontal }}"
+             alt="Attendance vs target horizontal bar chart"
+             style="width:100%;border-radius:var(--radius-sm);">
+      </div>
+      {% endif %}
+    </div>
+
+    {% if charts.trend %}
+    <div class="col-12 fade-up fade-up-delay-3">
+      <div class="bw-card">
+        <div class="section-header">
+          <h2><i class="bi bi-graph-up text-accent"></i> Attendance Trend Over Time</h2>
+        </div>
+        <img src="data:image/png;base64,{{ charts.trend }}"
+             alt="Cumulative attendance trend line chart"
+             style="width:100%;border-radius:var(--radius-sm);max-height:280px;object-fit:contain;">
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+
+  <!-- Pandas summary table -->
+  {% if df_html %}
+  <div class="bw-card mt-4 fade-up">
+    <div class="section-header">
+      <h2><i class="bi bi-table text-accent"></i> Summary Table (Pandas DataFrame)</h2>
+    </div>
+    <div style="overflow-x:auto;">
+      {{ df_html|safe }}
+    </div>
+  </div>
+  {% endif %}
+
+  {% else %}
+    <div class="bw-card">
+      <div class="empty-state">
+        <div class="icon">📊</div>
+        <p>No attendance data yet to generate charts.<br>
+           <a href="{% url 'calendar_view' semester_id=semester.id %}">Start marking attendance</a> first.</p>
+      </div>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

@@ -1,0 +1,94 @@
+{% extends 'attendance/base.html' %}
+{% block title %}Special Days — {{ semester.name }}{% endblock %}
+
+{% block content %}
+<div class="container-xl">
+  <div class="page-header fade-up">
+    <h1>⭐ Special Days</h1>
+    <p>{{ semester.name }} &nbsp;·&nbsp; Manage holidays, exams, events, and partial days.</p>
+  </div>
+
+  <div class="row g-4">
+
+    <!-- Add form -->
+    <div class="col-lg-4">
+      <div class="bw-card fade-up" style="position:sticky;top:80px;">
+        <h2 style="font-size:1rem;font-weight:700;color:#fff;margin-bottom:1.25rem;">
+          <i class="bi bi-plus-circle text-accent"></i> Add Special Day
+        </h2>
+        <form method="post" novalidate>
+          {% csrf_token %}
+          {% for field in form %}
+            <div class="mb-3">
+              <label class="form-label">{{ field.label }}</label>
+              {{ field }}
+              {% if field.help_text %}
+                <div style="font-size:.72rem;color:var(--text-muted);">{{ field.help_text }}</div>
+              {% endif %}
+              {% if field.errors %}
+                <div style="font-size:.75rem;color:var(--critical);">{{ field.errors.0 }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+          <button type="submit" class="btn-bw-primary w-100 justify-content-center">
+            <i class="bi bi-plus"></i> Add Special Day
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Existing special days -->
+    <div class="col-lg-8">
+      <div class="bw-card fade-up fade-up-delay-1">
+        <div class="section-header">
+          <h2><i class="bi bi-calendar-x text-accent"></i> {{ special|length }} Special Day{{ special|length|pluralize }}</h2>
+          <a href="{% url 'calendar_view' semester_id=semester.id %}" class="btn-bw-secondary" style="font-size:.75rem;padding:.3rem .7rem;">
+            <i class="bi bi-calendar3"></i> View Calendar
+          </a>
+        </div>
+
+        {% for sp in special %}
+          <div class="subject-row mb-2">
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+              <div style="text-align:center;min-width:50px;">
+                <div style="font-size:1.1rem;font-weight:800;color:#fff;">{{ sp.date|date:"d" }}</div>
+                <div style="font-size:.68rem;color:var(--text-muted);">{{ sp.date|date:"M Y" }}</div>
+              </div>
+              <div class="flex-grow-1">
+                <div style="font-size:.9rem;font-weight:700;color:#fff;">{{ sp.name }}</div>
+                <div style="font-size:.72rem;color:var(--text-muted);">{{ sp.date|date:"l" }}</div>
+              </div>
+              <span class="cal-special-badge badge-{{ sp.day_type }}" style="font-size:.72rem;padding:.25rem .6rem;">
+                {{ sp.get_day_type_display }}
+              </span>
+              {% if sp.affects_all_sessions %}
+                <span style="font-size:.68rem;color:var(--text-muted);">All sessions</span>
+              {% else %}
+                <span style="font-size:.68rem;color:var(--caution);">Partial</span>
+              {% endif %}
+              <form method="post" action="{% url 'special_day_delete' day_id=sp.id %}"
+                    onsubmit="return confirm('Remove {{ sp.name }}?')">
+                {% csrf_token %}
+                <button type="submit" class="btn-bw-danger" style="font-size:.72rem;padding:.25rem .5rem;">
+                  <i class="bi bi-trash3"></i>
+                </button>
+              </form>
+            </div>
+            {% if sp.description %}
+              <div style="font-size:.72rem;color:var(--text-muted);margin-top:.3rem;padding-left:66px;">
+                {{ sp.description }}
+              </div>
+            {% endif %}
+          </div>
+        {% empty %}
+          <div class="empty-state">
+            <div class="icon">⭐</div>
+            <p>No special days added yet. Add holidays, exams, and events above.</p>
+          </div>
+        {% endfor %}
+
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

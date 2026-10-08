@@ -1,0 +1,83 @@
+{% extends 'attendance/base.html' %}
+{% load bunkwise_tags %}
+{% block title %}{{ date|date:"d M Y" }} — {{ semester.name }}{% endblock %}
+
+{% block content %}
+<div class="container-xl" style="max-width:700px;">
+  <div class="page-header fade-up">
+    <div class="d-flex align-items-center gap-3">
+      <a href="{% url 'calendar_view' semester_id=semester.id %}" class="btn-bw-secondary" style="padding:.4rem .8rem;">
+        <i class="bi bi-arrow-left"></i>
+      </a>
+      <div>
+        <h1>{{ date|date:"l, d F Y" }}</h1>
+        <p>{{ semester.name }} &nbsp;·&nbsp; Mark Attendance</p>
+      </div>
+    </div>
+  </div>
+
+  {% if special_day %}
+    <div class="bw-alert bw-alert-{% if special_day.day_type == 'holiday' %}danger{% elif special_day.day_type == 'exam' %}warning{% else %}info{% endif %} mb-4 fade-up">
+      <i class="bi bi-{% if special_day.day_type == 'holiday' %}sun{% elif special_day.day_type == 'exam' %}pencil{% else %}calendar-event{% endif %}-fill"></i>
+      <strong>{{ special_day.name }}</strong>
+      {% if special_day.description %} &nbsp;·&nbsp; {{ special_day.description }}{% endif %}
+    </div>
+  {% endif %}
+
+  <div class="bw-card fade-up fade-up-delay-1">
+    {% if sessions %}
+      <form method="post" novalidate>
+        {% csrf_token %}
+        <div class="section-header mb-3">
+          <h2><i class="bi bi-check2-all text-accent"></i> {{ sessions|length }} Session{{ sessions|length|pluralize }}</h2>
+        </div>
+
+        {% for session in sessions %}
+          <div class="subject-row mb-3">
+            <div class="d-flex align-items-start gap-3 flex-wrap">
+              <div style="width:3px;height:60px;background:{{ session.subject.color }};border-radius:2px;flex-shrink:0;margin-top:4px;"></div>
+              <div class="flex-grow-1">
+                <div style="font-size:.95rem;font-weight:700;color:#fff;">
+                  {{ session.subject.icon }} {{ session.subject.name }}
+                </div>
+                <div style="font-size:.75rem;color:var(--text-muted);">
+                  {{ session.start_time|time:"H:i" }} – {{ session.end_time|time:"H:i" }}
+                  &nbsp;·&nbsp; {{ session.duration_minutes|duration_fmt }}
+                  {% if session.subject.code %}&nbsp;·&nbsp; {{ session.subject.code }}{% endif %}
+                </div>
+                <div style="font-size:.72rem;color:var(--text-muted);margin-top:.2rem;">
+                  Weight: {{ session.attendance_weight }}
+                  &nbsp;·&nbsp; Policy: {{ semester.get_attendance_policy_display }}
+                </div>
+              </div>
+              <!-- Status selector -->
+              <div style="min-width:160px;">
+                {% with field_name="session_"|add:session.id|stringformat:"s" %}
+                  {{ form|get_field:field_name }}
+                {% endwith %}
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+
+        <div class="d-flex gap-3 mt-4">
+          <button type="submit" class="btn-bw-primary flex-grow-1 justify-content-center" style="padding:.65rem;">
+            <i class="bi bi-check2-all"></i> Save Attendance
+          </button>
+          <a href="{% url 'calendar_view' semester_id=semester.id %}" class="btn-bw-secondary">
+            <i class="bi bi-x"></i> Cancel
+          </a>
+        </div>
+      </form>
+    {% else %}
+      <div class="empty-state">
+        <div class="icon">📭</div>
+        <p>No sessions scheduled for this day.</p>
+        <a href="{% url 'calendar_view' semester_id=semester.id %}" class="btn-bw-secondary mt-2 d-inline-flex">
+          <i class="bi bi-arrow-left"></i> Back to Calendar
+        </a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

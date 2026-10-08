@@ -1,0 +1,97 @@
+{% extends 'attendance/base.html' %}
+{% block title %}Semester Setup{% endblock %}
+
+{% block content %}
+<div class="container-xl">
+  <div class="page-header fade-up">
+    <h1>🎓 Semester Setup</h1>
+    <p>Create a new semester or switch between existing ones.</p>
+  </div>
+
+  <div class="row g-4">
+
+    <!-- Create new semester form -->
+    <div class="col-lg-5">
+      <div class="bw-card fade-up">
+        <h2 style="font-size:1rem;font-weight:700;color:#fff;margin-bottom:1.25rem;">
+          <i class="bi bi-plus-circle text-accent"></i> New Semester
+        </h2>
+        <form method="post" novalidate>
+          {% csrf_token %}
+          {% for field in form %}
+            <div class="mb-3">
+              <label class="form-label">{{ field.label }}</label>
+              {{ field }}
+              {% if field.help_text %}
+                <div style="font-size:.72rem;color:var(--text-muted);margin-top:.25rem;">{{ field.help_text }}</div>
+              {% endif %}
+              {% if field.errors %}
+                <div style="font-size:.75rem;color:var(--critical);margin-top:.25rem;">{{ field.errors.0 }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+          {% if form.non_field_errors %}
+            <div class="bw-alert bw-alert-danger mb-3">{{ form.non_field_errors.0 }}</div>
+          {% endif %}
+          <button type="submit" class="btn-bw-primary w-100 justify-content-center" style="padding:.65rem;">
+            <i class="bi bi-plus-circle"></i> Create Semester
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Existing semesters -->
+    <div class="col-lg-7">
+      <div class="bw-card fade-up fade-up-delay-1">
+        <h2 style="font-size:1rem;font-weight:700;color:#fff;margin-bottom:1.25rem;">
+          <i class="bi bi-list-ul text-accent"></i> Your Semesters
+        </h2>
+        {% for sem in semesters %}
+          <div class="subject-row mb-3">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+              <div>
+                <div style="font-size:.95rem;font-weight:700;color:#fff;">{{ sem.name }}</div>
+                <div style="font-size:.75rem;color:var(--text-muted);">
+                  {{ sem.start_date|date:"d M Y" }} → {{ sem.end_date|date:"d M Y" }}
+                  &nbsp;·&nbsp; Min {{ sem.min_attendance }}%
+                  &nbsp;·&nbsp; {{ sem.get_attendance_policy_display }}
+                </div>
+              </div>
+              <div class="d-flex gap-2 align-items-center">
+                {% if sem.is_active %}
+                  <span class="risk-badge risk-SAFE">✅ Active</span>
+                {% else %}
+                  <form method="post" action="{% url 'semester_activate' semester_id=sem.id %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn-bw-secondary" style="font-size:.75rem;padding:.3rem .7rem;">
+                      Activate
+                    </button>
+                  </form>
+                {% endif %}
+                <a href="{% url 'subject_list' semester_id=sem.id %}" class="btn-bw-secondary" style="font-size:.75rem;padding:.3rem .7rem;">
+                  <i class="bi bi-arrow-right"></i> Open
+                </a>
+              </div>
+            </div>
+            <!-- Progress bar -->
+            <div class="mt-2">
+              <div class="progress-pill">
+                <div class="progress-fill" style="width:{{ sem.progress_percent }}%;"></div>
+              </div>
+              <div style="font-size:.7rem;color:var(--text-muted);margin-top:.2rem;">
+                Semester progress: {{ sem.progress_percent }}%
+              </div>
+            </div>
+          </div>
+        {% empty %}
+          <div class="empty-state">
+            <div class="icon">🎓</div>
+            <p>No semesters yet. Create your first one!</p>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
