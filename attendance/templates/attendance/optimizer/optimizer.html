@@ -24,7 +24,6 @@
           <!-- Mode tabs -->
           <div class="mb-3">
             <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
-              {% for mode, label in "sessions:Select Sessions,day:Full Day Off,range:Date Range"|split:","|default:"" %}{% endfor %}
               <button type="button" class="btn-bw-secondary mode-btn active" data-mode="sessions" style="flex:1;justify-content:center;font-size:.78rem;"
                       onclick="setMode('sessions',this)">📋 Sessions</button>
               <button type="button" class="btn-bw-secondary mode-btn" data-mode="day" style="flex:1;justify-content:center;font-size:.78rem;"

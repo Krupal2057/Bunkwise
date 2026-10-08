@@ -98,3 +98,12 @@ def get_field(form, field_name):
     except KeyError:
         return ''
 
+
+@register.filter
+def split(value, arg):
+    """Split a string by delimiter: {{ "a,b,c"|split:"," }}"""
+    if isinstance(value, str):
+        return value.split(arg)
+    return []
+
+

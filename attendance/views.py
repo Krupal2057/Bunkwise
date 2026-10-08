@@ -648,6 +648,7 @@ def analytics(request, semester_id):
         ax.set_ylabel('Attendance %', color=TEXT_CLR, fontsize=10)
         ax.set_title('Subject-wise Attendance', color=TEXT_CLR, fontsize=13, pad=12)
         ax.tick_params(colors=TEXT_CLR, labelsize=9)
+        ax.set_xticks(range(len(df)))
         ax.set_xticklabels(df['Subject'], rotation=20, ha='right', color=TEXT_CLR)
         for spine in ax.spines.values():
             spine.set_edgecolor(GRID_CLR)
