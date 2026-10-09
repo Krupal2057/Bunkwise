@@ -21,6 +21,7 @@ from django.contrib import messages
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.utils import timezone
+from django.db.models import Q
 
 from .models import (
     Semester, Subject, TimetableEntry, ClassSession,
@@ -124,10 +125,20 @@ def semester_edit(request, semester_id):
     semester = get_object_or_404(Semester, id=semester_id, user=request.user)
     form = SemesterForm(request.POST or None, instance=semester)
     if request.method == 'POST' and form.is_valid():
-        form.save()
-        messages.success(request, "Semester updated.")
+        semester = form.save()
+        # Clean up scheduled sessions outside new date boundaries
+        ClassSession.objects.filter(semester=semester, status='scheduled').filter(
+            Q(date__lt=semester.start_date) | Q(date__gt=semester.end_date)
+        ).delete()
+        # Generate sessions for any new/expanded dates
+        services.generate_sessions(semester)
+        # Re-apply any special days / holidays for new dates
+        for sp in semester.special_days.all():
+            services.apply_special_day(sp)
+        messages.success(request, f"Semester '{semester.name}' updated! Calendar sessions synced.")
         return redirect('dashboard')
     return render(request, 'attendance/semester/edit.html', {'form': form, 'semester': semester})
+
 
 
 @login_required
@@ -271,8 +282,8 @@ def generate_sessions_view(request, semester_id):
 def calendar_view(request, semester_id):
     semester = get_object_or_404(Semester, id=semester_id, user=request.user)
 
-    # Auto-generate sessions if timetable entries exist but no sessions were created yet
-    if semester.sessions.count() == 0 and semester.timetable_entries.exists():
+    # Auto-generate sessions across all semester dates if timetable entries exist
+    if semester.timetable_entries.exists():
         services.generate_sessions(semester)
 
     today = timezone.localdate()
@@ -340,6 +351,11 @@ def day_detail(request, semester_id, date_str):
         target_date = date.fromisoformat(date_str)
     except ValueError:
         return redirect('calendar_view', semester_id=semester_id)
+
+    # Ensure sessions exist for this date if within semester range and timetable has entries for this weekday
+    if semester.start_date <= target_date <= semester.end_date and semester.timetable_entries.filter(day_of_week=target_date.weekday()).exists():
+        if not ClassSession.objects.filter(semester=semester, date=target_date).exists():
+            services.generate_sessions(semester)
 
     sessions = ClassSession.objects.filter(
         semester=semester, date=target_date

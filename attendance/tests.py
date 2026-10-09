@@ -394,9 +394,32 @@ class BunkWiseViewsTests(TestCase):
         self.assertEqual(created_extra.notes, 'Ad-hoc session')
         self.assertEqual(created_extra.status, 'present')
 
-        # 7. Semester Delete
+        # 7. Semester Date Shift (expanding start date earlier creates sessions)
+        TimetableEntry.objects.create(
+            semester=self.semester,
+            subject=self.subject,
+            session_type='lecture',
+            day_of_week=(self.semester.start_date - timedelta(days=2)).weekday(),
+            start_time=time(9, 0),
+            end_time=time(10, 0),
+        )
+        new_start = self.semester.start_date - timedelta(days=2)
+        shift_resp = self.client.post(reverse('semester_edit', args=[self.semester.id]), {
+            'name': self.semester.name,
+            'start_date': new_start.isoformat(),
+            'end_date': self.semester.end_date.isoformat(),
+            'min_attendance': 75.0,
+            'safety_buffer': 5.0,
+            'attendance_policy': 'session',
+        })
+        self.assertEqual(shift_resp.status_code, 302)
+        # Verify session for newly added earlier date exists
+        self.assertTrue(ClassSession.objects.filter(semester=self.semester, date=new_start).exists())
+
+        # 8. Semester Delete
         sem_del = self.client.post(reverse('semester_delete', args=[self.semester.id]))
         self.assertEqual(sem_del.status_code, 302)
         self.assertFalse(Semester.objects.filter(id=self.semester.id).exists())
+
 
 
