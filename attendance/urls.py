@@ -19,6 +19,7 @@ urlpatterns = [
     # ── Semester ───────────────────────────────────────────────────────────
     path('semester/setup/',                  views.semester_setup,    name='semester_setup'),
     path('semester/<int:semester_id>/edit/', views.semester_edit,     name='semester_edit'),
+    path('semester/<int:semester_id>/delete/', views.semester_delete, name='semester_delete'),
     path('semester/<int:semester_id>/activate/', views.semester_activate, name='semester_activate'),
 
     # ── Subjects ───────────────────────────────────────────────────────────
@@ -28,15 +29,20 @@ urlpatterns = [
 
     # ── Timetable ──────────────────────────────────────────────────────────
     path('semester/<int:semester_id>/timetable/',           views.timetable_view,           name='timetable'),
+    path('timetable/entry/<int:entry_id>/edit/',            views.timetable_entry_edit,     name='timetable_entry_edit'),
     path('timetable/entry/<int:entry_id>/delete/',          views.timetable_entry_delete,   name='timetable_entry_delete'),
     path('semester/<int:semester_id>/generate-sessions/',   views.generate_sessions_view,   name='generate_sessions'),
 
-    # ── Calendar ───────────────────────────────────────────────────────────
+    # ── Calendar & Class Sessions ──────────────────────────────────────────
     path('semester/<int:semester_id>/calendar/',            views.calendar_view, name='calendar_view'),
     path('semester/<int:semester_id>/day/<str:date_str>/',  views.day_detail,    name='day_detail'),
+    path('session/<int:session_id>/edit/',                  views.session_edit,  name='session_edit'),
+    path('session/<int:session_id>/delete/',                views.session_delete, name='session_delete'),
 
-    # ── Special days ───────────────────────────────────────────────────────
+    # ── Special days & Holidays ────────────────────────────────────────────
     path('semester/<int:semester_id>/special-days/',        views.special_days,        name='special_days'),
+    path('semester/<int:semester_id>/populate-holidays/',   views.populate_holidays_view, name='populate_holidays'),
+    path('special-day/<int:day_id>/edit/',                  views.special_day_edit,    name='special_day_edit'),
     path('special-day/<int:day_id>/delete/',                views.special_day_delete,  name='special_day_delete'),
 
     # ── Attendance ─────────────────────────────────────────────────────────
@@ -53,6 +59,7 @@ urlpatterns = [
 
     # ── Event planner ──────────────────────────────────────────────────────
     path('semester/<int:semester_id>/events/',              views.event_planner, name='event_planner'),
+    path('event/<int:event_id>/edit/',                      views.event_edit,    name='event_edit'),
     path('event/<int:event_id>/delete/',                    views.event_delete,  name='event_delete'),
 
     # ── Analytics ──────────────────────────────────────────────────────────
@@ -60,4 +67,7 @@ urlpatterns = [
 
     # ── AJAX ───────────────────────────────────────────────────────────────
     path('api/session/<int:session_id>/status/',            views.api_session_status, name='api_session_status'),
+    path('api/day/<int:semester_id>/<str:date_str>/status/', views.api_day_status, name='api_day_status'),
+    path('api/batch-days/<int:semester_id>/status/',        views.api_batch_days_status, name='api_batch_days_status'),
+    path('semester/<int:semester_id>/mark-past-present/',   views.mark_all_past_present_view, name='mark_past_present'),
 ]

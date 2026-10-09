@@ -78,20 +78,9 @@ def regenerate_sessions(semester):
 def calculate_attendance(subject):
     """
     Returns a dict with raw counts and percentages for a subject.
+    Unifies all session types (lectures, labs, tutorials) into the subject's overall total attendance,
+    and provides a detailed breakdown per session type (lecture, lab, tutorial).
     Uses attendance_weight for period-based policy.
-
-    Returns:
-        {
-            'conducted':   float  (weighted sessions actually conducted),
-            'attended':    float  (weighted sessions attended),
-            'absent':      float  (weighted sessions absent),
-            'percentage':  float  (0–100, rounded to 2dp),
-            'min_required': float,
-            'effective_target': float,
-            'raw_conducted': int,  (count of sessions)
-            'raw_attended':  int,
-            'raw_absent':    int,
-        }
     """
     from attendance.models import ClassSession
 
@@ -110,6 +99,27 @@ def calculate_attendance(subject):
 
     percentage = (attended_w / conducted_w * 100) if conducted_w > 0 else 0.0
 
+    # Lecture breakdown
+    lecture_sessions = sessions.filter(session_type='lecture')
+    lec_conducted = lecture_sessions.count()
+    lec_attended  = lecture_sessions.filter(status='present').count()
+    lec_absent    = lecture_sessions.filter(status='absent').count()
+    lec_pct       = round((lec_attended / lec_conducted * 100), 2) if lec_conducted > 0 else 0.0
+
+    # Lab breakdown
+    lab_sessions  = sessions.filter(session_type='lab')
+    lab_conducted = lab_sessions.count()
+    lab_attended  = lab_sessions.filter(status='present').count()
+    lab_absent    = lab_sessions.filter(status='absent').count()
+    lab_pct       = round((lab_attended / lab_conducted * 100), 2) if lab_conducted > 0 else 0.0
+
+    # Tutorial breakdown
+    tut_sessions  = sessions.filter(session_type='tutorial')
+    tut_conducted = tut_sessions.count()
+    tut_attended  = tut_sessions.filter(status='present').count()
+    tut_absent    = tut_sessions.filter(status='absent').count()
+    tut_pct       = round((tut_attended / tut_conducted * 100), 2) if tut_conducted > 0 else 0.0
+
     return {
         'conducted':        round(conducted_w, 2),
         'attended':         round(attended_w, 2),
@@ -120,6 +130,19 @@ def calculate_attendance(subject):
         'raw_conducted':    raw_conducted,
         'raw_attended':     raw_attended,
         'raw_absent':       raw_absent,
+        'has_lab':          subject.has_lab,
+        'lec_conducted':    lec_conducted,
+        'lec_attended':     lec_attended,
+        'lec_absent':       lec_absent,
+        'lec_pct':          lec_pct,
+        'lab_conducted':    lab_conducted,
+        'lab_attended':     lab_attended,
+        'lab_absent':       lab_absent,
+        'lab_pct':          lab_pct,
+        'tut_conducted':    tut_conducted,
+        'tut_attended':     tut_attended,
+        'tut_absent':       tut_absent,
+        'tut_pct':          tut_pct,
     }
 
 
@@ -484,28 +507,34 @@ def get_calendar_data(semester, year, month):
         key = s.date.isoformat()
         events_dict.setdefault(key, {'sessions': [], 'special': None})
         events_dict[key]['sessions'].append({
-            'id':       s.id,
-            'subject':  s.subject.name,
-            'color':    s.subject.color,
-            'start':    s.start_time.strftime('%H:%M'),
-            'end':      s.end_time.strftime('%H:%M'),
-            'status':   s.status,
-            'duration': s.duration_minutes,
+            'id':                   s.id,
+            'subject':              s.subject.name,
+            'color':                s.subject.color,
+            'icon':                 s.subject.icon,
+            'session_type':         s.session_type,
+            'session_type_display': s.get_session_type_display(),
+            'start':                s.start_time.strftime('%H:%M'),
+            'end':                  s.end_time.strftime('%H:%M'),
+            'status':               s.status,
+            'duration':             s.duration_minutes,
         })
 
     for sp in special_days:
         key = sp.date.isoformat()
         events_dict.setdefault(key, {'sessions': [], 'special': None})
         events_dict[key]['special'] = {
-            'name':     sp.name,
-            'type':     sp.day_type,
+            'id':          sp.id,
+            'name':        sp.name,
+            'type':        sp.day_type,
+            'description': sp.description,
+            'affects_all': sp.affects_all_sessions,
         }
 
     return events_dict
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Special Day Application
+# Special Day Application & Removal
 # ─────────────────────────────────────────────────────────────────────────────
 
 def apply_special_day(special_day):
@@ -535,3 +564,170 @@ def apply_special_day(special_day):
         for override in special_day.session_overrides.select_related('session').all():
             override.session.status = override.override_status
             override.session.save(update_fields=['status'])
+
+
+def remove_special_day(special_day):
+    """When a SpecialDay is deleted, restore affected sessions on that date back to scheduled."""
+    from attendance.models import ClassSession
+    ClassSession.objects.filter(
+        semester=special_day.semester,
+        date=special_day.date,
+        status__in=['holiday', 'event', 'exam', 'modified', 'cancelled']
+    ).update(status='scheduled')
+
+
+def populate_official_holidays(semester):
+    """
+    Auto-populates standard official gazetted Indian holidays falling within the semester range.
+    Returns (created_count, skipped_count).
+    """
+    from attendance.models import SpecialDay
+    official_list = [
+        # 2026
+        (date(2026, 1, 26), "Republic Day"),
+        (date(2026, 3, 4),  "Holi"),
+        (date(2026, 3, 21), "Id-ul-Fitr (Ramzan Eid)"),
+        (date(2026, 4, 3),  "Good Friday"),
+        (date(2026, 4, 14), "Dr. Ambedkar Jayanti"),
+        (date(2026, 5, 1),  "May Day / Maharashtra Day"),
+        (date(2026, 5, 27), "Bakrid / Eid al-Adha"),
+        (date(2026, 6, 26), "Muharram"),
+        (date(2026, 8, 15), "Independence Day"),
+        (date(2026, 8, 28), "Raksha Bandhan"),
+        (date(2026, 9, 4),  "Janmashtami"),
+        (date(2026, 9, 15), "Milad-un-Nabi (Id-e-Milad)"),
+        (date(2026, 10, 2), "Mahatma Gandhi Jayanti"),
+        (date(2026, 10, 20), "Dussehra (Vijayadashami)"),
+        (date(2026, 11, 8), "Diwali (Deepavali)"),
+        (date(2026, 11, 9), "Govardhan Puja"),
+        (date(2026, 11, 10), "Bhai Dooj"),
+        (date(2026, 11, 24), "Guru Nanak Jayanti"),
+        (date(2026, 12, 25), "Christmas Day"),
+        # 2027
+        (date(2027, 1, 26), "Republic Day"),
+        (date(2027, 3, 23), "Holi"),
+        (date(2027, 4, 14), "Dr. Ambedkar Jayanti"),
+        (date(2027, 8, 15), "Independence Day"),
+        (date(2027, 10, 2), "Mahatma Gandhi Jayanti"),
+        (date(2027, 10, 28), "Diwali"),
+        (date(2027, 12, 25), "Christmas Day"),
+    ]
+
+    created_count = 0
+    skipped_count = 0
+    for h_date, h_name in official_list:
+        if semester.start_date <= h_date <= semester.end_date:
+            sp, was_created = SpecialDay.objects.get_or_create(
+                semester=semester,
+                date=h_date,
+                defaults={
+                    'name': h_name,
+                    'day_type': 'holiday',
+                    'description': f'Official Holiday — {h_name}',
+                    'affects_all_sessions': True,
+                }
+            )
+            if was_created:
+                apply_special_day(sp)
+                created_count += 1
+            else:
+                skipped_count += 1
+
+    return created_count, skipped_count
+
+
+def batch_set_days_status(semester, date_strs, status, user, holiday_name="Holiday"):
+    """
+    Batch update multiple dates at once (e.g. from multi-day selection):
+    - If status == 'holiday': creates or updates SpecialDay as holiday for each date.
+    - If status in ('present', 'absent', 'cancelled'): updates all sessions on each date.
+    - If status == 'reset': removes SpecialDay if any, and resets sessions to 'scheduled'.
+    """
+    from attendance.models import SpecialDay, ClassSession
+    updated_dates = 0
+    for d_str in date_strs:
+        try:
+            d = date.fromisoformat(d_str)
+        except ValueError:
+            continue
+
+        if status == 'holiday':
+            sp, _ = SpecialDay.objects.get_or_create(
+                semester=semester,
+                date=d,
+                defaults={'name': holiday_name, 'day_type': 'holiday', 'affects_all_sessions': True}
+            )
+            sp.name = holiday_name
+            sp.day_type = 'holiday'
+            sp.affects_all_sessions = True
+            sp.save()
+            apply_special_day(sp)
+            updated_dates += 1
+        elif status == 'reset':
+            sp = SpecialDay.objects.filter(semester=semester, date=d).first()
+            if sp:
+                remove_special_day(sp)
+                sp.delete()
+            ClassSession.objects.filter(semester=semester, date=d).update(status='scheduled')
+            updated_dates += 1
+        else:
+            mark_day_sessions(semester, d, status, user)
+            updated_dates += 1
+
+    return updated_dates
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Attendance Marking Helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+def mark_session_status(session, status, user, notes=''):
+    """Mark a single session's status and update the AttendanceRecord."""
+    from attendance.models import AttendanceRecord
+    session.status = status
+    if notes:
+        session.notes = notes
+    session.save(update_fields=['status', 'notes'] if notes else ['status'])
+    AttendanceRecord.objects.update_or_create(
+        session=session,
+        defaults={'student': user, 'status': status, 'notes': notes}
+    )
+    return session
+
+
+def mark_day_sessions(semester, target_date, status, user, session_ids=None):
+    """
+    Mark all (or specified subset of) sessions on a date with the given status.
+    Skips cancelled or holiday sessions unless explicitly overridden.
+    """
+    from attendance.models import ClassSession
+    qs = ClassSession.objects.filter(semester=semester, date=target_date)
+    if session_ids is not None:
+        qs = qs.filter(id__in=session_ids)
+    else:
+        # Exclude non-conducted special day statuses when mass marking
+        qs = qs.exclude(status__in=['holiday', 'event', 'exam'])
+
+    updated_count = 0
+    for session in qs:
+        mark_session_status(session, status, user)
+        updated_count += 1
+    return updated_count
+
+
+def mark_all_past_as_present(semester, user):
+    """
+    Convenience helper: Defaults all past and today's scheduled sessions to 'present'.
+    """
+    from attendance.models import ClassSession
+    today = timezone.localdate()
+    scheduled_past = ClassSession.objects.filter(
+        semester=semester,
+        date__lte=today,
+        status='scheduled'
+    )
+    count = 0
+    for session in scheduled_past:
+        mark_session_status(session, 'present', user)
+        count += 1
+    return count

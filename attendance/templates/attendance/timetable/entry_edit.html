@@ -1,0 +1,64 @@
+{% extends 'attendance/base.html' %}
+{% block title %}Edit Timetable Entry — {{ semester.name }}{% endblock %}
+
+{% block content %}
+<div class="container-xl" style="max-width:600px;">
+  <div class="page-header fade-up">
+    <div class="d-flex align-items-center gap-3">
+      <a href="{% url 'timetable' semester_id=semester.id %}" class="btn-bw-secondary" style="padding:.4rem .8rem;">
+        <i class="bi bi-arrow-left"></i>
+      </a>
+      <div>
+        <h1>✏️ Edit Timetable Entry</h1>
+        <p>{{ semester.name }} &nbsp;·&nbsp; {{ entry.subject.name }} ({{ entry.get_day_of_week_display }})</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="bw-card fade-up fade-up-delay-1">
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% for field in form %}
+        <div class="mb-3">
+          <label class="form-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}
+            <div style="font-size:.72rem;color:var(--text-muted);margin-top:.2rem;">{{ field.help_text }}</div>
+          {% endif %}
+          {% if field.errors %}
+            <div style="font-size:.75rem;color:var(--critical);">{{ field.errors.0 }}</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+
+      {% if form.non_field_errors %}
+        <div class="bw-alert bw-alert-danger mb-3">{{ form.non_field_errors.0 }}</div>
+      {% endif %}
+
+      <div class="d-flex gap-3 mt-4">
+        <button type="submit" class="btn-bw-primary flex-grow-1 justify-content-center" style="padding:.65rem;">
+          <i class="bi bi-check2"></i> Save Changes
+        </button>
+        <a href="{% url 'timetable' semester_id=semester.id %}" class="btn-bw-secondary">
+          Cancel
+        </a>
+      </div>
+    </form>
+
+    <div class="divider my-4"></div>
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        <div style="font-weight:700;color:var(--critical);font-size:.9rem;">Danger Zone</div>
+        <div style="font-size:.75rem;color:var(--text-muted);">Remove this recurring slot from your timetable.</div>
+      </div>
+      <form method="post" action="{% url 'timetable_entry_delete' entry_id=entry.id %}"
+            onsubmit="return confirm('Remove this timetable slot? Future scheduled sessions for this slot will be deleted.');">
+        {% csrf_token %}
+        <button type="submit" class="btn-bw-danger">
+          <i class="bi bi-trash3"></i> Delete Entry
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

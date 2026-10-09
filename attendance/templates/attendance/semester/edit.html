@@ -28,6 +28,21 @@
         <a href="{% url 'dashboard' %}" class="btn-bw-secondary">Cancel</a>
       </div>
     </form>
+
+    <div class="divider my-4"></div>
+    <div class="d-flex justify-content-between align-items-center">
+      <div>
+        <div style="font-weight:700;color:var(--critical);font-size:.9rem;">Danger Zone</div>
+        <div style="font-size:.75rem;color:var(--text-muted);">Permanently delete this semester and all related data.</div>
+      </div>
+      <form method="post" action="{% url 'semester_delete' semester_id=semester.id %}"
+            onsubmit="return confirm('Are you sure you want to delete this semester? This cannot be undone.');">
+        {% csrf_token %}
+        <button type="submit" class="btn-bw-danger">
+          <i class="bi bi-trash3"></i> Delete Semester
+        </button>
+      </form>
+    </div>
   </div>
 </div>
 {% endblock %}

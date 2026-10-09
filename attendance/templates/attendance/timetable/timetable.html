@@ -74,18 +74,28 @@
                         &nbsp;·&nbsp; weight: {{ entry.attendance_weight }}
                       {% endif %}
                     </div>
-                    <div class="subj">{{ entry.subject.icon }} {{ entry.subject.name }}</div>
+                    <div class="subj">
+                      {{ entry.subject.icon }} {{ entry.subject.name }}
+                      <span class="status-chip ms-1" style="font-size:.65rem;padding:.1rem .35rem;background:rgba(255,255,255,0.06);border:1px solid var(--border-color);">
+                        {% if entry.session_type == 'lab' %}🔬 Lab{% elif entry.session_type == 'tutorial' %}📝 Tutorial{% else %}📖 Lecture{% endif %}
+                      </span>
+                    </div>
                     {% if entry.room %}
                       <div class="room"><i class="bi bi-geo-alt"></i> {{ entry.room }}</div>
                     {% endif %}
                   </div>
-                  <form method="post" action="{% url 'timetable_entry_delete' entry_id=entry.id %}"
-                        onsubmit="return confirm('Remove this entry?');">
-                    {% csrf_token %}
-                    <button type="submit" class="btn-bw-danger" style="font-size:.7rem;padding:.25rem .5rem;">
-                      <i class="bi bi-trash3"></i>
-                    </button>
-                  </form>
+                  <div class="d-flex gap-2 align-items-center">
+                    <a href="{% url 'timetable_entry_edit' entry_id=entry.id %}" class="btn-bw-secondary" style="font-size:.7rem;padding:.25rem .5rem;" title="Edit Entry">
+                      <i class="bi bi-pencil"></i>
+                    </a>
+                    <form method="post" action="{% url 'timetable_entry_delete' entry_id=entry.id %}"
+                          onsubmit="return confirm('Remove this entry?');">
+                      {% csrf_token %}
+                      <button type="submit" class="btn-bw-danger" style="font-size:.7rem;padding:.25rem .5rem;" title="Delete Entry">
+                        <i class="bi bi-trash3"></i>
+                      </button>
+                    </form>
+                  </div>
                 </div>
               </div>
             {% empty %}

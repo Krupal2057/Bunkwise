@@ -1,0 +1,60 @@
+{% extends 'attendance/base.html' %}
+{% block title %}Edit Event — {{ semester.name }}{% endblock %}
+
+{% block content %}
+<div class="container-xl" style="max-width:600px;">
+  <div class="page-header fade-up">
+    <div class="d-flex align-items-center gap-3">
+      <a href="{% url 'event_planner' semester_id=semester.id %}" class="btn-bw-secondary" style="padding:.4rem .8rem;">
+        <i class="bi bi-arrow-left"></i>
+      </a>
+      <div>
+        <h1>✏️ Edit Event</h1>
+        <p>{{ semester.name }} &nbsp;·&nbsp; {{ event.name }}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="bw-card fade-up fade-up-delay-1">
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% for field in form %}
+        <div class="mb-3">
+          <label class="form-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}
+            <div style="font-size:.72rem;color:var(--text-muted);margin-top:.2rem;">{{ field.help_text }}</div>
+          {% endif %}
+          {% if field.errors %}
+            <div style="font-size:.75rem;color:var(--critical);">{{ field.errors.0 }}</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+
+      <div class="d-flex gap-3 mt-4">
+        <button type="submit" class="btn-bw-primary flex-grow-1 justify-content-center" style="padding:.65rem;">
+          <i class="bi bi-check2"></i> Save Changes
+        </button>
+        <a href="{% url 'event_planner' semester_id=semester.id %}" class="btn-bw-secondary">
+          Cancel
+        </a>
+      </div>
+    </form>
+
+    <div class="divider my-4"></div>
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        <div style="font-weight:700;color:var(--critical);font-size:.9rem;">Danger Zone</div>
+        <div style="font-size:.75rem;color:var(--text-muted);">Permanently remove this personal event from the planner.</div>
+      </div>
+      <form method="post" action="{% url 'event_delete' event_id=event.id %}"
+            onsubmit="return confirm('Are you sure you want to delete {{ event.name }}?');">
+        {% csrf_token %}
+        <button type="submit" class="btn-bw-danger">
+          <i class="bi bi-trash3"></i> Delete Event
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

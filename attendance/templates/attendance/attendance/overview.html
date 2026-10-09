@@ -64,7 +64,7 @@
             <div class="row g-2 mb-3" style="font-size:.8rem;">
               <div class="col-4 text-center">
                 <div style="font-size:1.2rem;font-weight:800;color:#fff;">{{ item.att.raw_conducted }}</div>
-                <div style="color:var(--text-muted);">Conducted</div>
+                <div style="color:var(--text-muted);">Total Classes</div>
               </div>
               <div class="col-4 text-center">
                 <div style="font-size:1.2rem;font-weight:800;color:var(--safe);">{{ item.att.raw_attended }}</div>
@@ -75,6 +75,15 @@
                 <div style="color:var(--text-muted);">Absent</div>
               </div>
             </div>
+
+            {% if item.subject.has_lab or item.att.lab_conducted > 0 %}
+              <div class="p-2 mb-3 rounded" style="background:rgba(255,255,255,0.03);border:1px solid var(--border-color);font-size:.75rem;">
+                <div class="d-flex justify-content-between flex-wrap gap-2">
+                  <span>📖 <strong>Lectures:</strong> {{ item.att.lec_attended }}/{{ item.att.lec_conducted }} ({{ item.att.lec_pct }}%)</span>
+                  <span>🔬 <strong>Labs:</strong> {{ item.att.lab_attended }}/{{ item.att.lab_conducted }} ({{ item.att.lab_pct }}%)</span>
+                </div>
+              </div>
+            {% endif %}
 
             <div class="divider"></div>
 

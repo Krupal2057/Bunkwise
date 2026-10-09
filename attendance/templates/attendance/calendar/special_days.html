@@ -42,9 +42,18 @@
       <div class="bw-card fade-up fade-up-delay-1">
         <div class="section-header">
           <h2><i class="bi bi-calendar-x text-accent"></i> {{ special|length }} Special Day{{ special|length|pluralize }}</h2>
-          <a href="{% url 'calendar_view' semester_id=semester.id %}" class="btn-bw-secondary" style="font-size:.75rem;padding:.3rem .7rem;">
-            <i class="bi bi-calendar3"></i> View Calendar
-          </a>
+          <div class="d-flex gap-2 align-items-center">
+            <form method="post" action="{% url 'populate_holidays' semester_id=semester.id %}" style="display:inline;"
+                  onsubmit="return confirm('Auto-add all official Indian gazetted holidays falling in this semester?');">
+              {% csrf_token %}
+              <button type="submit" class="btn-bw-primary" style="font-size:.75rem;padding:.3rem .7rem;">
+                <i class="bi bi-calendar2-check"></i> Auto-Add Official Holidays
+              </button>
+            </form>
+            <a href="{% url 'calendar_view' semester_id=semester.id %}" class="btn-bw-secondary" style="font-size:.75rem;padding:.3rem .7rem;">
+              <i class="bi bi-calendar3"></i> View Calendar
+            </a>
+          </div>
         </div>
 
         {% for sp in special %}
@@ -66,13 +75,18 @@
               {% else %}
                 <span style="font-size:.68rem;color:var(--caution);">Partial</span>
               {% endif %}
-              <form method="post" action="{% url 'special_day_delete' day_id=sp.id %}"
-                    onsubmit="return confirm('Remove {{ sp.name }}?')">
-                {% csrf_token %}
-                <button type="submit" class="btn-bw-danger" style="font-size:.72rem;padding:.25rem .5rem;">
-                  <i class="bi bi-trash3"></i>
-                </button>
-              </form>
+              <div class="d-flex gap-2 align-items-center">
+                <a href="{% url 'special_day_edit' day_id=sp.id %}" class="btn-bw-secondary" style="font-size:.72rem;padding:.25rem .5rem;" title="Edit Special Day">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <form method="post" action="{% url 'special_day_delete' day_id=sp.id %}"
+                      onsubmit="return confirm('Remove {{ sp.name }}?')">
+                  {% csrf_token %}
+                  <button type="submit" class="btn-bw-danger" style="font-size:.72rem;padding:.25rem .5rem;" title="Delete Special Day">
+                    <i class="bi bi-trash3"></i>
+                  </button>
+                </form>
+              </div>
             </div>
             {% if sp.description %}
               <div style="font-size:.72rem;color:var(--text-muted);margin-top:.3rem;padding-left:66px;">

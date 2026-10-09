@@ -72,13 +72,18 @@
                 &nbsp;·&nbsp; {{ ei.event.get_event_type_display }}
               </div>
             </div>
-            <form method="post" action="{% url 'event_delete' event_id=ei.event.id %}"
-                  onsubmit="return confirm('Remove this event?')">
-              {% csrf_token %}
-              <button type="submit" class="btn-bw-danger" style="font-size:.75rem;padding:.3rem .6rem;">
-                <i class="bi bi-trash3"></i>
-              </button>
-            </form>
+            <div class="d-flex gap-2 align-items-center">
+              <a href="{% url 'event_edit' event_id=ei.event.id %}" class="btn-bw-secondary" style="font-size:.75rem;padding:.3rem .6rem;" title="Edit Event">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <form method="post" action="{% url 'event_delete' event_id=ei.event.id %}"
+                    onsubmit="return confirm('Remove this event?')">
+                {% csrf_token %}
+                <button type="submit" class="btn-bw-danger" style="font-size:.75rem;padding:.3rem .6rem;" title="Delete Event">
+                  <i class="bi bi-trash3"></i>
+                </button>
+              </form>
+            </div>
           </div>
 
           {% if ei.impact %}

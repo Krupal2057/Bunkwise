@@ -75,6 +75,12 @@
                         style="background:rgba(255,255,255,.06);color:var(--text-secondary);border:1px solid var(--border-color);">
                     {{ subj.get_subject_type_display }}
                   </span>
+                  {% if subj.has_lab %}
+                    <span class="status-chip"
+                          style="background:rgba(129,140,248,0.15);color:#818cf8;border:1px solid rgba(129,140,248,0.3);">
+                      🔬 Includes Lab
+                    </span>
+                  {% endif %}
                 </div>
                 <div style="font-size:.75rem;color:var(--text-muted);margin-top:.2rem;">
                   Min attendance:
@@ -83,6 +89,7 @@
                   {% else %}
                     <span>{{ semester.min_attendance }}% (semester default)</span>
                   {% endif %}
+                  {% if subj.has_lab %}&nbsp;·&nbsp; <em>Unified Theory + Lab Attendance</em>{% endif %}
                 </div>
               </div>
               <!-- Color swatch -->

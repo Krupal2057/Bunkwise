@@ -254,3 +254,149 @@ class BunkWiseViewsTests(TestCase):
         sess.refresh_from_db()
         self.assertEqual(sess.status, 'holiday')
 
+        # Test special day removal resets status
+        services.remove_special_day(sp)
+        sess.refresh_from_db()
+        self.assertEqual(sess.status, 'scheduled')
+
+    def test_full_crud_operations(self):
+        self.client.login(username='teststudent', password='password123')
+
+        # 1. Subject Edit & Delete
+        edit_resp = self.client.post(reverse('subject_edit', args=[self.subject.id]), {
+            'name': 'Advanced Algorithms',
+            'code': 'CS301-A',
+            'subject_type': 'lecture',
+            'has_lab': True,
+            'color': '#4f46e5',
+            'icon': '💻'
+        })
+        self.assertEqual(edit_resp.status_code, 302)
+        self.subject.refresh_from_db()
+        self.assertEqual(self.subject.name, 'Advanced Algorithms')
+        self.assertTrue(self.subject.has_lab)
+
+        # 2. Timetable Entry Edit & Delete
+        entry = TimetableEntry.objects.create(
+            semester=self.semester,
+            subject=self.subject,
+            session_type='lecture',
+            day_of_week=1,
+            start_time=time(10, 0),
+            end_time=time(11, 0),
+            room='Room 101'
+        )
+        entry_edit = self.client.post(reverse('timetable_entry_edit', args=[entry.id]), {
+            'subject': self.subject.id,
+            'session_type': 'lab',
+            'day_of_week': 2,
+            'start_time': '11:00',
+            'end_time': '13:00',
+            'room': 'Lab 4'
+        })
+        self.assertEqual(entry_edit.status_code, 302)
+        entry.refresh_from_db()
+        self.assertEqual(entry.session_type, 'lab')
+        self.assertEqual(entry.day_of_week, 2)
+        self.assertEqual(entry.room, 'Lab 4')
+
+        entry_del = self.client.post(reverse('timetable_entry_delete', args=[entry.id]))
+        self.assertEqual(entry_del.status_code, 302)
+        self.assertFalse(TimetableEntry.objects.filter(id=entry.id).exists())
+
+        # 3. Special Day Edit & Delete
+        sp = SpecialDay.objects.create(
+            semester=self.semester,
+            date=self.today + timedelta(days=10),
+            day_type='event',
+            name='Tech Fest',
+            affects_all_sessions=True
+        )
+        sp_edit = self.client.post(reverse('special_day_edit', args=[sp.id]), {
+            'date': (self.today + timedelta(days=10)).isoformat(),
+            'day_type': 'holiday',
+            'name': 'Tech Fest Holiday',
+            'affects_all_sessions': True
+        })
+        self.assertEqual(sp_edit.status_code, 302)
+        sp.refresh_from_db()
+        self.assertEqual(sp.name, 'Tech Fest Holiday')
+
+        sp_del = self.client.post(reverse('special_day_delete', args=[sp.id]))
+        self.assertEqual(sp_del.status_code, 302)
+        self.assertFalse(SpecialDay.objects.filter(id=sp.id).exists())
+
+        # 4. Personal Event Edit & Delete
+        event = Event.objects.create(
+            user=self.user,
+            semester=self.semester,
+            name='Hackathon',
+            event_type='personal',
+            start_date=self.today + timedelta(days=15),
+            end_date=self.today + timedelta(days=16)
+        )
+        ev_edit = self.client.post(reverse('event_edit', args=[event.id]), {
+            'name': 'National Hackathon',
+            'event_type': 'trip',
+            'start_date': (self.today + timedelta(days=15)).isoformat(),
+            'end_date': (self.today + timedelta(days=17)).isoformat()
+        })
+        self.assertEqual(ev_edit.status_code, 302)
+        event.refresh_from_db()
+        self.assertEqual(event.name, 'National Hackathon')
+
+        ev_del = self.client.post(reverse('event_delete', args=[event.id]))
+        self.assertEqual(ev_del.status_code, 302)
+        self.assertFalse(Event.objects.filter(id=event.id).exists())
+
+        # 5. Class Session Edit & Delete
+        sess = ClassSession.objects.create(
+            semester=self.semester,
+            subject=self.subject,
+            date=self.today + timedelta(days=3),
+            start_time=time(9, 0),
+            end_time=time(10, 0),
+            duration_minutes=60,
+            status='scheduled'
+        )
+        sess_edit = self.client.post(reverse('session_edit', args=[sess.id]), {
+            'subject': self.subject.id,
+            'session_type': 'lab',
+            'start_time': '09:00',
+            'end_time': '11:00',
+            'status': 'present',
+            'notes': 'Extra makeup lab'
+        })
+        self.assertEqual(sess_edit.status_code, 302)
+        sess.refresh_from_db()
+        self.assertEqual(sess.session_type, 'lab')
+        self.assertEqual(sess.duration_minutes, 120)
+        self.assertEqual(sess.notes, 'Extra makeup lab')
+
+        sess_del = self.client.post(reverse('session_delete', args=[sess.id]))
+        self.assertEqual(sess_del.status_code, 302)
+        self.assertFalse(ClassSession.objects.filter(id=sess.id).exists())
+
+        # 6. Extra Session Add via Day Detail
+        target_date_str = (self.today + timedelta(days=4)).isoformat()
+        add_extra = self.client.post(reverse('day_detail', args=[self.semester.id, target_date_str]), {
+            'action': 'add_extra',
+            'subject': self.subject.id,
+            'session_type': 'lecture',
+            'start_time': '14:00',
+            'end_time': '15:00',
+            'status': 'present',
+            'notes': 'Ad-hoc session'
+        })
+        self.assertEqual(add_extra.status_code, 302)
+        created_extra = ClassSession.objects.filter(semester=self.semester, date=self.today + timedelta(days=4)).first()
+        self.assertIsNotNone(created_extra)
+        self.assertEqual(created_extra.notes, 'Ad-hoc session')
+        self.assertEqual(created_extra.status, 'present')
+
+        # 7. Semester Delete
+        sem_del = self.client.post(reverse('semester_delete', args=[self.semester.id]))
+        self.assertEqual(sem_del.status_code, 302)
+        self.assertFalse(Semester.objects.filter(id=self.semester.id).exists())
+
+

@@ -5,6 +5,57 @@
 {% block extra_css %}
 <style>
   .cal-body { display: grid; grid-template-columns: repeat(7, 1fr); }
+  .cal-day-selected {
+    border: 2px solid var(--accent) !important;
+    background: rgba(129, 140, 248, 0.18) !important;
+    box-shadow: inset 0 0 12px rgba(129, 140, 248, 0.3) !important;
+  }
+  .floating-batch-bar {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(120%);
+    background: rgba(18, 22, 36, 0.95);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--accent);
+    box-shadow: 0 10px 35px rgba(0, 0, 0, 0.6), 0 0 15px rgba(129, 140, 248, 0.3);
+    border-radius: 50px;
+    padding: 0.6rem 1.4rem;
+    z-index: 1050;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .floating-batch-bar.show {
+    transform: translateX(-50%) translateY(0);
+  }
+  .cal-context-menu {
+    position: fixed;
+    display: none;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+    border-radius: 8px;
+    padding: 0.4rem 0;
+    z-index: 1060;
+    min-width: 180px;
+  }
+  .cal-context-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 1rem;
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.15s;
+  }
+  .cal-context-item:hover {
+    background: rgba(129, 140, 248, 0.15);
+    color: #fff;
+  }
 </style>
 {% endblock %}
 
@@ -15,9 +66,23 @@
     <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
       <div>
         <h1>📅 Calendar</h1>
-        <p>{{ semester.name }}</p>
+        <p>{{ semester.name }} &nbsp;·&nbsp; <span style="font-size:.8rem;color:var(--text-muted);"><kbd style="background:rgba(255,255,255,0.1);padding:.1rem .3rem;">Ctrl+Click</kbd> or right-click to multi-select days</span></p>
       </div>
       <div class="d-flex gap-2 flex-wrap">
+        <form method="post" action="{% url 'populate_holidays' semester_id=semester.id %}" style="display:inline;"
+              onsubmit="return confirm('Auto-add official Indian gazetted holidays for this semester?');">
+          {% csrf_token %}
+          <button type="submit" class="btn-bw-primary" style="font-size:.8rem;">
+            <i class="bi bi-calendar2-check"></i> Auto-Add Official Holidays
+          </button>
+        </form>
+        <form method="post" action="{% url 'mark_past_present' semester_id=semester.id %}" style="display:inline;"
+              onsubmit="return confirm('Default all past scheduled classes up to today as Present?');">
+          {% csrf_token %}
+          <button type="submit" class="btn-bw-secondary" style="font-size:.8rem;">
+            <i class="bi bi-lightning-charge"></i> Default Past to Present
+          </button>
+        </form>
         <a href="{% url 'special_days' semester_id=semester.id %}" class="btn-bw-secondary">
           <i class="bi bi-star"></i> Special Days
         </a>
@@ -40,12 +105,12 @@
       <i class="bi bi-chevron-right"></i>
     </a>
     <!-- Legend -->
-    <div class="ms-auto d-flex gap-3 flex-wrap" style="font-size:.72rem;">
+    <div class="ms-auto d-flex gap-3 flex-wrap align-items-center" style="font-size:.72rem;">
       <span><span class="cal-dot" style="background:var(--safe);display:inline-block;width:8px;height:8px;border-radius:50%;"></span> Present</span>
-      <span><span class="cal-dot" style="background:var(--critical);display:inline-block;width:8px;height:8px;border-radius:50%;"></span> Absent</span>
+      <span><span class="cal-dot" style="background:var(--critical);display:inline-block;width:8px;height:8px;border-radius:50%;"></span> Absent (Bunk)</span>
       <span><span class="cal-dot" style="background:var(--accent);display:inline-block;width:8px;height:8px;border-radius:50%;"></span> Scheduled</span>
       <span><span class="cal-dot" style="background:var(--caution);display:inline-block;width:8px;height:8px;border-radius:50%;"></span> Exam</span>
-      <span><span class="cal-special-badge badge-holiday">Holiday</span></span>
+      <span><span class="cal-special-badge badge-holiday" style="font-size:.65rem;">Holiday</span></span>
     </div>
   </div>
 
@@ -64,17 +129,76 @@
 
   </div>
 
-  <!-- Day detail modal -->
+  <!-- Floating Multi-Day Batch Bar -->
+  <div id="floatingBatchBar" class="floating-batch-bar">
+    <span class="badge" style="background:var(--accent);font-size:.8rem;padding:.35rem .6rem;" id="batchCountBadge">0 days</span>
+    <span style="font-size:.82rem;font-weight:600;color:#fff;">Batch Actions:</span>
+    <button type="button" class="btn-bw-danger" style="font-size:.75rem;padding:.3rem .7rem;" onclick="batchApply('absent')">
+      <i class="bi bi-x-circle"></i> Bunk Selected
+    </button>
+    <button type="button" class="btn-bw-primary" style="font-size:.75rem;padding:.3rem .7rem;" onclick="batchApply('present')">
+      <i class="bi bi-check2-all"></i> Mark Present
+    </button>
+    <button type="button" class="btn-bw-secondary" style="font-size:.75rem;padding:.3rem .7rem;" onclick="batchPromptHoliday()">
+      <i class="bi bi-sun"></i> Set Holiday
+    </button>
+    <button type="button" class="btn-bw-secondary" style="font-size:.75rem;padding:.3rem .7rem;" onclick="batchApply('reset')">
+      <i class="bi bi-arrow-counterclockwise"></i> Reset
+    </button>
+    <button type="button" class="btn btn-sm btn-link text-muted" style="font-size:.75rem;text-decoration:none;" onclick="clearSelection()">
+      <i class="bi bi-x"></i> Deselect
+    </button>
+  </div>
+
+  <!-- Context Menu on Right Click -->
+  <div id="calContextMenu" class="cal-context-menu">
+    <div class="cal-context-item" onclick="contextAction('bunk')">
+      <i class="bi bi-x-circle text-danger"></i> Bunk Whole Day
+    </div>
+    <div class="cal-context-item" onclick="contextAction('present')">
+      <i class="bi bi-check2-circle text-success"></i> Mark Whole Day Present
+    </div>
+    <div class="cal-context-item" onclick="contextAction('holiday')">
+      <i class="bi bi-sun text-warning"></i> Set as Holiday
+    </div>
+    <div class="cal-context-item" onclick="contextAction('open')">
+      <i class="bi bi-box-arrow-up-right text-info"></i> Open Day Details
+    </div>
+    <div class="cal-context-item" onclick="contextAction('reset')">
+      <i class="bi bi-arrow-counterclockwise text-secondary"></i> Reset Day
+    </div>
+  </div>
+
+  <!-- Day detail modal with Quick Bunk Actions -->
   <div class="modal fade" id="dayModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
       <div class="modal-content" style="background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:var(--radius-md);">
-        <div class="modal-header" style="border-color:var(--border-color);">
-          <h5 class="modal-title" id="dayModalTitle" style="color:#fff;font-size:1rem;"></h5>
-          <a id="dayModalLink" href="#" class="btn-bw-primary ms-auto" style="font-size:.75rem;padding:.3rem .7rem;">
-            <i class="bi bi-pencil"></i> Mark Attendance
-          </a>
+        <div class="modal-header d-flex justify-content-between align-items-center" style="border-color:var(--border-color);">
+          <div>
+            <h5 class="modal-title" id="dayModalTitle" style="color:#fff;font-size:1.1rem;font-weight:700;"></h5>
+            <div id="dayModalSub" style="font-size:.75rem;color:var(--text-muted);">Quick Attendance & Bunk Manager</div>
+          </div>
+          <div class="d-flex gap-2 align-items-center">
+            <a id="dayModalLink" href="#" class="btn-bw-secondary" style="font-size:.75rem;padding:.35rem .7rem;">
+              <i class="bi bi-box-arrow-up-right"></i> Full Day View
+            </a>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
         </div>
-        <div class="modal-body" id="dayModalBody"></div>
+
+        <div class="modal-body" id="dayModalBody" style="max-height:65vh;overflow-y:auto;"></div>
+
+        <div class="modal-footer d-flex justify-content-between align-items-center flex-wrap gap-2" style="border-color:var(--border-color);background:rgba(0,0,0,0.2);">
+          <div class="d-flex gap-2 flex-wrap" id="dayModalFooterActions">
+            <button type="button" id="btnBunkDay" class="btn-bw-danger" style="font-size:.8rem;padding:.4rem .8rem;">
+              <i class="bi bi-x-circle"></i> Bunk Whole Day
+            </button>
+            <button type="button" id="btnPresentDay" class="btn-bw-primary" style="font-size:.8rem;padding:.4rem .8rem;">
+              <i class="bi bi-check2-all"></i> Mark Whole Day Present
+            </button>
+          </div>
+          <button type="button" class="btn-bw-secondary" data-bs-dismiss="modal" style="font-size:.8rem;">Done</button>
+        </div>
       </div>
     </div>
   </div>
@@ -84,7 +208,7 @@
     <div class="col-lg-5">
       <div class="bw-card fade-up">
         <h2 style="font-size:1rem;font-weight:700;color:#fff;margin-bottom:1rem;">
-          <i class="bi bi-calendar-plus text-accent"></i> Add Special Day
+          <i class="bi bi-calendar-plus text-accent"></i> Add Special Day / Holiday
         </h2>
         <form method="post" novalidate>
           {% csrf_token %}
@@ -111,11 +235,12 @@
 {% block extra_js %}
 <script>
 // ── Calendar data from Django ────────────────────────────────────────────────
-const CAL_DATA   = {{ calendar_data|safe }};
-const TODAY      = "{{ today }}";
+let CAL_DATA      = {{ calendar_data|safe }};
+const TODAY       = "{{ today }}";
 const SEMESTER_ID = "{{ semester.id }}";
-const YEAR       = {{ year }};
-const MONTH      = {{ month }};
+const YEAR        = {{ year }};
+const MONTH       = {{ month }};
+const CSRF_TOKEN  = "{{ csrf_token }}";
 
 // ── Status → color map ───────────────────────────────────────────────────────
 const STATUS_COLORS = {
@@ -130,102 +255,352 @@ const STATUS_COLORS = {
 };
 
 const STATUS_LABELS = {
-  present:   '✅ Present',
-  absent:    '❌ Absent',
-  cancelled: '🚫 Cancelled',
-  holiday:   '🏖️ Holiday',
-  exam:      '📝 Exam',
-  event:     '🎉 Event',
-  scheduled: '📅 Scheduled',
-  modified:  '🔄 Modified',
+  present:   'Present',
+  absent:    'Absent (Bunk)',
+  cancelled: 'Cancelled',
+  holiday:   'Holiday',
+  exam:      'Exam',
+  event:     'Event',
+  scheduled: 'Scheduled',
+  modified:  'Modified',
 };
+
+// ── Multi-select state ───────────────────────────────────────────────────────
+const selectedDates = new Set();
+let contextTargetDate = null;
+let currentActiveDate = null;
 
 // ── Build calendar grid ──────────────────────────────────────────────────────
 const matrix = {{ month_matrix|safe }};
 const grid   = document.getElementById('cal-grid');
 
-matrix.forEach(week => {
-  week.forEach(day => {
-    const cell = document.createElement('div');
-    cell.classList.add('cal-day');
+function renderCalendar() {
+  grid.innerHTML = '';
+  matrix.forEach(week => {
+    week.forEach(day => {
+      const cell = document.createElement('div');
+      cell.classList.add('cal-day');
 
-    if (day === 0) {
-      cell.classList.add('other-month');
-      grid.appendChild(cell);
-      return;
-    }
+      if (day === 0) {
+        cell.classList.add('other-month');
+        grid.appendChild(cell);
+        return;
+      }
 
-    const dateStr = `${YEAR}-${String(MONTH).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-    const data    = CAL_DATA[dateStr] || { sessions: [], special: null };
+      const dateStr = `${YEAR}-${String(MONTH).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+      const data    = CAL_DATA[dateStr] || { sessions: [], special: null };
 
-    if (dateStr === TODAY) cell.classList.add('today');
+      if (dateStr === TODAY) cell.classList.add('today');
+      if (selectedDates.has(dateStr)) cell.classList.add('cal-day-selected');
 
-    let html = `<div class="cal-date">${day}</div>`;
+      let html = `<div class="cal-date">${day}</div>`;
 
-    // Special day badge
-    if (data.special) {
-      const t = data.special.type;
-      html += `<div class="cal-special-badge badge-${t}">${data.special.name}</div>`;
-    }
+      // Special day / Holiday badge
+      if (data.special) {
+        const t = data.special.type;
+        html += `<div class="cal-special-badge badge-${t}" title="${data.special.name}">${data.special.name}</div>`;
+      }
 
-    // Session dots
-    if (data.sessions.length > 0) {
-      html += '<div class="cal-dots mt-1">';
-      data.sessions.forEach(s => {
-        const col = s.color || STATUS_COLORS[s.status] || '#818cf8';
-        html += `<span class="cal-dot" title="${s.subject}: ${s.start}–${s.end}" style="background:${col};"></span>`;
+      // Session dots
+      if (data.sessions && data.sessions.length > 0) {
+        html += '<div class="cal-dots mt-1">';
+        data.sessions.forEach(s => {
+          const col = STATUS_COLORS[s.status] || '#818cf8';
+          html += `<span class="cal-dot" title="${s.subject} (${s.session_type || 'class'}): ${s.start}–${s.end} [${s.status}]" style="background:${col};"></span>`;
+        });
+        html += '</div>';
+      }
+
+      cell.innerHTML = html;
+      cell.style.cursor = 'pointer';
+
+      // Left Click (Normal or Ctrl+Click)
+      cell.addEventListener('click', (e) => {
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          toggleDateSelection(dateStr, cell);
+        } else {
+          if (selectedDates.size > 0) {
+            toggleDateSelection(dateStr, cell);
+          } else {
+            openDayModal(dateStr, day);
+          }
+        }
       });
-      html += '</div>';
-    }
 
-    cell.innerHTML = html;
+      // Right Click Context Menu
+      cell.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        openContextMenu(e, dateStr);
+      });
 
-    // Click → open modal
-    cell.style.cursor = 'pointer';
-    cell.addEventListener('click', () => openDayModal(dateStr, day, data));
-
-    grid.appendChild(cell);
+      grid.appendChild(cell);
+    });
   });
+
+  updateBatchBar();
+}
+
+renderCalendar();
+
+// ── Multi-select helpers ────────────────────────────────────────────────────
+function toggleDateSelection(dateStr, cell) {
+  if (selectedDates.has(dateStr)) {
+    selectedDates.delete(dateStr);
+    if (cell) cell.classList.remove('cal-day-selected');
+  } else {
+    selectedDates.add(dateStr);
+    if (cell) cell.classList.add('cal-day-selected');
+  }
+  updateBatchBar();
+}
+
+function clearSelection() {
+  selectedDates.clear();
+  renderCalendar();
+}
+
+function updateBatchBar() {
+  const bar = document.getElementById('floatingBatchBar');
+  const countBadge = document.getElementById('batchCountBadge');
+  if (selectedDates.size > 0) {
+    countBadge.textContent = `${selectedDates.size} day${selectedDates.size > 1 ? 's' : ''}`;
+    bar.classList.add('show');
+  } else {
+    bar.classList.remove('show');
+  }
+}
+
+// ── Batch Actions API ────────────────────────────────────────────────────────
+function batchApply(status, holidayName = 'Holiday') {
+  if (selectedDates.size === 0) return;
+  const dateArr = Array.from(selectedDates);
+
+  fetch(`/api/batch-days/${SEMESTER_ID}/status/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': CSRF_TOKEN,
+    },
+    body: JSON.stringify({
+      dates: dateArr,
+      status: status,
+      holiday_name: holidayName
+    })
+  })
+  .then(res => res.json())
+  .then(resp => {
+    if (resp.ok) {
+      window.location.reload();
+    }
+  })
+  .catch(err => console.error('Batch update failed:', err));
+}
+
+function batchPromptHoliday() {
+  const name = prompt("Enter official holiday name for selected dates:", "Official Holiday");
+  if (name) {
+    batchApply('holiday', name);
+  }
+}
+
+// ── Context Menu ────────────────────────────────────────────────────────────
+const ctxMenu = document.getElementById('calContextMenu');
+
+function openContextMenu(e, dateStr) {
+  contextTargetDate = dateStr;
+  ctxMenu.style.left = `${e.clientX + 5}px`;
+  ctxMenu.style.top = `${e.clientY + 5}px`;
+  ctxMenu.style.display = 'block';
+}
+
+document.addEventListener('click', () => {
+  ctxMenu.style.display = 'none';
 });
 
-// ── Day modal ────────────────────────────────────────────────────────────────
-function openDayModal(dateStr, day, data) {
-  const modal = new bootstrap.Modal(document.getElementById('dayModal'));
-  document.getElementById('dayModalTitle').textContent =
-    `${String(day).padStart(2,'0')} ${new Date(dateStr + 'T00:00').toLocaleDateString('en-IN', {month:'long', year:'numeric'})}`;
-  document.getElementById('dayModalLink').href =
-    `/semester/${SEMESTER_ID}/day/${dateStr}/`;
+function contextAction(action) {
+  if (!contextTargetDate) return;
+  if (action === 'bunk') {
+    bulkUpdateDay(contextTargetDate, 'absent');
+  } else if (action === 'present') {
+    bulkUpdateDay(contextTargetDate, 'present');
+  } else if (action === 'holiday') {
+    const name = prompt("Enter holiday name:", "Holiday");
+    if (name) {
+      batchApplyCustom([contextTargetDate], 'holiday', name);
+    }
+  } else if (action === 'open') {
+    window.location.href = `/semester/${SEMESTER_ID}/day/${contextTargetDate}/`;
+  } else if (action === 'reset') {
+    batchApplyCustom([contextTargetDate], 'reset');
+  }
+}
 
+function batchApplyCustom(dates, status, holidayName = 'Holiday') {
+  fetch(`/api/batch-days/${SEMESTER_ID}/status/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': CSRF_TOKEN,
+    },
+    body: JSON.stringify({ dates: dates, status: status, holiday_name: holidayName })
+  })
+  .then(res => res.json())
+  .then(resp => {
+    if (resp.ok) window.location.reload();
+  });
+}
+
+// ── Day modal ────────────────────────────────────────────────────────────────
+function openDayModal(dateStr, day) {
+  currentActiveDate = dateStr;
+  const data = CAL_DATA[dateStr] || { sessions: [], special: null };
+  const modalEl = document.getElementById('dayModal');
+  const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+
+  const formattedDate = new Date(dateStr + 'T00:00').toLocaleDateString('en-IN', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+  });
+  document.getElementById('dayModalTitle').textContent = formattedDate;
+  document.getElementById('dayModalLink').href = `/semester/${SEMESTER_ID}/day/${dateStr}/`;
+
+  renderModalBody(dateStr, data);
+  modal.show();
+}
+
+function renderModalBody(dateStr, data) {
   let body = '';
   if (data.special) {
-    body += `<div class="bw-alert bw-alert-${data.special.type === 'holiday' ? 'danger' : 'info'} mb-3">
-               ${data.special.type === 'holiday' ? '🏖️' : data.special.type === 'exam' ? '📝' : '🎉'}
-               <strong>${data.special.name}</strong>
-             </div>`;
+    const editUrl = data.special.id ? `/special-day/${data.special.id}/edit/` : `/semester/${SEMESTER_ID}/special-days/`;
+    body += `
+      <div class="bw-alert bw-alert-${data.special.type === 'holiday' ? 'danger' : 'info'} mb-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div>
+          <span style="font-size:1.1rem;">${data.special.type === 'holiday' ? '🏖️' : data.special.type === 'exam' ? '📝' : '🎉'}</span>
+          <strong>${data.special.name}</strong>
+          ${data.special.description ? `<div style="font-size:.75rem;color:var(--text-muted);">${data.special.description}</div>` : ''}
+        </div>
+        <div class="d-flex gap-2">
+          ${data.special.id ? `
+            <a href="${editUrl}" class="btn-bw-secondary" style="font-size:.72rem;padding:.2rem .5rem;" title="Edit Holiday">
+              <i class="bi bi-pencil"></i> Edit
+            </a>
+            <form method="post" action="/special-day/${data.special.id}/delete/" style="display:inline;" onsubmit="return confirm('Remove this holiday?');">
+              <input type="hidden" name="csrfmiddlewaretoken" value="${CSRF_TOKEN}">
+              <button type="submit" class="btn-bw-danger" style="font-size:.72rem;padding:.2rem .5rem;" title="Delete Holiday">
+                <i class="bi bi-trash3"></i> Remove
+              </button>
+            </form>` : ''}
+        </div>
+      </div>`;
   }
 
-  if (data.sessions.length === 0) {
-    body += '<p style="color:var(--text-muted);font-size:.85rem;">No sessions scheduled.</p>';
+  if (!data.sessions || data.sessions.length === 0) {
+    body += '<div class="text-center py-4" style="color:var(--text-muted);"><i class="bi bi-calendar-x" style="font-size:2rem;"></i><p class="mt-2">No regular classes on this day.</p></div>';
+    document.getElementById('btnBunkDay').style.display = 'none';
+    document.getElementById('btnPresentDay').style.display = 'none';
   } else {
+    document.getElementById('btnBunkDay').style.display = 'inline-flex';
+    document.getElementById('btnPresentDay').style.display = 'inline-flex';
+
     data.sessions.forEach(s => {
-      const col = STATUS_COLORS[s.status] || '#818cf8';
-      body += `<div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;
-                            padding:.6rem;background:var(--bg-glass);border-radius:8px;
-                            border-left:3px solid ${s.color || col};">
-        <div style="flex:1;">
-          <div style="font-size:.85rem;font-weight:600;color:#fff;">${s.subject}</div>
-          <div style="font-size:.72rem;color:var(--text-muted);">${s.start}–${s.end} · ${s.duration}min</div>
-        </div>
-        <span style="font-size:.7rem;font-weight:700;padding:.2rem .6rem;border-radius:50px;
-                     background:${col}22;color:${col};border:1px solid ${col}44;">
-          ${STATUS_LABELS[s.status] || s.status}
-        </span>
-      </div>`;
+      const typeBadge = s.session_type === 'lab'
+        ? '<span class="badge" style="background:rgba(129,140,248,0.2);color:#818cf8;font-size:.68rem;">🔬 Lab</span>'
+        : (s.session_type === 'tutorial' ? '<span class="badge" style="background:rgba(245,158,11,0.2);color:#f59e0b;font-size:.68rem;">📝 Tutorial</span>' : '<span class="badge" style="background:rgba(255,255,255,0.08);color:var(--text-secondary);font-size:.68rem;">📖 Lecture</span>');
+
+      body += `
+        <div class="session-modal-card p-3 mb-2 rounded" style="background:var(--bg-glass);border:1px solid var(--border-color);border-left:4px solid ${s.color || '#818cf8'};">
+          <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div>
+              <div class="d-flex align-items-center gap-2">
+                <span style="font-size:1.1rem;">${s.icon || '📚'}</span>
+                <span style="font-weight:700;color:#fff;font-size:.92rem;">${s.subject}</span>
+                ${typeBadge}
+              </div>
+              <div style="font-size:.75rem;color:var(--text-muted);margin-top:.2rem;">
+                <i class="bi bi-clock"></i> ${s.start} – ${s.end} &nbsp;·&nbsp; ${s.duration} mins
+              </div>
+            </div>
+
+            <!-- Quick Action Status Pills -->
+            <div class="btn-group btn-group-sm" role="group" aria-label="Status">
+              <button type="button" class="btn ${s.status === 'present' ? 'btn-success text-white fw-bold' : 'btn-outline-secondary'}"
+                      onclick="updateSessionStatus(${s.id}, 'present', '${dateStr}')" style="font-size:.75rem;padding:.25rem .6rem;">
+                <i class="bi bi-check-lg"></i> Present
+              </button>
+              <button type="button" class="btn ${s.status === 'absent' ? 'btn-danger text-white fw-bold' : 'btn-outline-secondary'}"
+                      onclick="updateSessionStatus(${s.id}, 'absent', '${dateStr}')" style="font-size:.75rem;padding:.25rem .6rem;">
+                <i class="bi bi-x-lg"></i> Bunk
+              </button>
+              <button type="button" class="btn ${s.status === 'cancelled' ? 'btn-secondary text-white fw-bold' : 'btn-outline-secondary'}"
+                      onclick="updateSessionStatus(${s.id}, 'cancelled', '${dateStr}')" style="font-size:.75rem;padding:.25rem .6rem;">
+                <i class="bi bi-slash-circle"></i> Cancel
+              </button>
+            </div>
+          </div>
+        </div>`;
     });
   }
 
   document.getElementById('dayModalBody').innerHTML = body;
-  modal.show();
+}
+
+// ── Single session status toggle via AJAX ────────────────────────────────────
+function updateSessionStatus(sessionId, newStatus, dateStr) {
+  fetch(`/api/session/${sessionId}/status/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': CSRF_TOKEN,
+    },
+    body: JSON.stringify({ status: newStatus })
+  })
+  .then(res => res.json())
+  .then(resp => {
+    if (resp.ok) {
+      if (CAL_DATA[dateStr]) {
+        const target = CAL_DATA[dateStr].sessions.find(s => s.id === sessionId);
+        if (target) target.status = newStatus;
+      }
+      renderModalBody(dateStr, CAL_DATA[dateStr]);
+      renderCalendar();
+    }
+  })
+  .catch(err => console.error('Error updating session status:', err));
+}
+
+// ── Bulk Day Bunk / Present Handlers ─────────────────────────────────────────
+document.getElementById('btnBunkDay').addEventListener('click', () => {
+  if (!currentActiveDate) return;
+  bulkUpdateDay(currentActiveDate, 'absent');
+});
+
+document.getElementById('btnPresentDay').addEventListener('click', () => {
+  if (!currentActiveDate) return;
+  bulkUpdateDay(currentActiveDate, 'present');
+});
+
+function bulkUpdateDay(dateStr, newStatus) {
+  fetch(`/api/day/${SEMESTER_ID}/${dateStr}/status/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': CSRF_TOKEN,
+    },
+    body: JSON.stringify({ status: newStatus })
+  })
+  .then(res => res.json())
+  .then(resp => {
+    if (resp.ok && CAL_DATA[dateStr]) {
+      CAL_DATA[dateStr].sessions.forEach(s => {
+        if (!['holiday', 'event', 'exam'].includes(s.status)) {
+          s.status = newStatus;
+        }
+      });
+      renderModalBody(dateStr, CAL_DATA[dateStr]);
+      renderCalendar();
+    }
+  })
+  .catch(err => console.error('Error in bulk update:', err));
 }
 </script>
 {% endblock %}

@@ -6,7 +6,7 @@ Auth, Dashboard, Semester, Subject, Timetable, Calendar, Attendance, Bunk Optimi
 import json
 import io
 import base64
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import matplotlib
 matplotlib.use('Agg')  # Non-interactive backend — required for server-side rendering
@@ -28,7 +28,7 @@ from .models import (
 )
 from .forms import (
     RegisterForm, LoginForm, SemesterForm, SubjectForm,
-    TimetableEntryForm, AttendanceMarkForm, SpecialDayForm, EventForm
+    TimetableEntryForm, AttendanceMarkForm, SpecialDayForm, EventForm, ExtraSessionForm
 )
 from . import services
 
@@ -130,6 +130,18 @@ def semester_edit(request, semester_id):
     return render(request, 'attendance/semester/edit.html', {'form': form, 'semester': semester})
 
 
+@login_required
+def semester_delete(request, semester_id):
+    """Delete a semester and its related subjects, timetable, and sessions."""
+    semester = get_object_or_404(Semester, id=semester_id, user=request.user)
+    if request.method == 'POST':
+        name = semester.name
+        semester.delete()
+        messages.warning(request, f"Semester '{name}' deleted.")
+        return redirect('semester_setup')
+    return redirect('semester_setup')
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # Subjects
 # ═════════════════════════════════════════════════════════════════════════════
@@ -185,7 +197,8 @@ def timetable_view(request, semester_id):
         entry = form.save(commit=False)
         entry.semester = semester
         entry.save()
-        messages.success(request, "Timetable entry added.")
+        services.generate_sessions(semester)
+        messages.success(request, "Timetable entry added and calendar synced. ✅")
         return redirect('timetable', semester_id=semester.id)
 
     day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
@@ -205,10 +218,30 @@ def timetable_view(request, semester_id):
 
 
 @login_required
+def timetable_entry_edit(request, entry_id):
+    """Edit a single timetable schedule entry."""
+    entry = get_object_or_404(TimetableEntry, id=entry_id, semester__user=request.user)
+    form = TimetableEntryForm(entry.semester, request.POST or None, instance=entry)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        today = timezone.localdate()
+        ClassSession.objects.filter(timetable_entry=entry, date__gte=today, status='scheduled').delete()
+        services.generate_sessions(entry.semester)
+        messages.success(request, "Timetable entry updated and future sessions synced.")
+        return redirect('timetable', semester_id=entry.semester.id)
+    return render(request, 'attendance/timetable/entry_edit.html', {
+        'form': form,
+        'entry': entry,
+        'semester': entry.semester,
+    })
+
+
+@login_required
 def timetable_entry_delete(request, entry_id):
     entry = get_object_or_404(TimetableEntry, id=entry_id, semester__user=request.user)
     semester_id = entry.semester.id
     if request.method == 'POST':
+        ClassSession.objects.filter(timetable_entry=entry, status='scheduled').delete()
         entry.delete()
         messages.warning(request, "Timetable entry removed.")
     return redirect('timetable', semester_id=semester_id)
@@ -237,6 +270,11 @@ def generate_sessions_view(request, semester_id):
 @login_required
 def calendar_view(request, semester_id):
     semester = get_object_or_404(Semester, id=semester_id, user=request.user)
+
+    # Auto-generate sessions if timetable entries exist but no sessions were created yet
+    if semester.sessions.count() == 0 and semester.timetable_entries.exists():
+        services.generate_sessions(semester)
+
     today = timezone.localdate()
 
     # Month navigation
@@ -296,7 +334,7 @@ def calendar_view(request, semester_id):
 
 @login_required
 def day_detail(request, semester_id, date_str):
-    """Show and mark attendance for all sessions on a specific date."""
+    """Show and mark attendance for all sessions on a specific date, or add extra sessions."""
     semester = get_object_or_404(Semester, id=semester_id, user=request.user)
     try:
         target_date = date.fromisoformat(date_str)
@@ -309,21 +347,42 @@ def day_detail(request, semester_id, date_str):
 
     special_day = SpecialDay.objects.filter(semester=semester, date=target_date).first()
 
-    form = AttendanceMarkForm(sessions, request.POST or None)
-    if request.method == 'POST' and form.is_valid():
-        for session in sessions:
-            field = f'session_{session.id}'
-            new_status = form.cleaned_data.get(field)
-            if new_status:
-                session.status = new_status
-                session.save(update_fields=['status'])
-                # Update or create attendance record
-                AttendanceRecord.objects.update_or_create(
-                    session=session,
-                    defaults={'student': request.user, 'status': new_status}
-                )
-        messages.success(request, f"Attendance marked for {target_date.strftime('%d %B %Y')}. ✅")
-        return redirect('day_detail', semester_id=semester_id, date_str=date_str)
+    extra_form = ExtraSessionForm(semester, request.POST if request.POST.get('action') == 'add_extra' else None)
+    form = AttendanceMarkForm(sessions, request.POST if request.POST.get('action') != 'add_extra' and request.method == 'POST' else None)
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'add_extra':
+            if extra_form.is_valid():
+                sess = extra_form.save(commit=False)
+                sess.semester = semester
+                sess.date = target_date
+                start = datetime.combine(target_date, sess.start_time)
+                end   = datetime.combine(target_date, sess.end_time)
+                sess.duration_minutes = max(1, int((end - start).total_seconds() // 60))
+                sess.attendance_weight = (sess.duration_minutes / 60.0) if semester.attendance_policy == 'period' else 1.0
+                sess.save()
+                if sess.status in ('present', 'absent', 'cancelled'):
+                    AttendanceRecord.objects.update_or_create(
+                        session=sess,
+                        defaults={'student': request.user, 'status': sess.status}
+                    )
+                messages.success(request, f"Extra session for '{sess.subject.name}' added on {target_date.strftime('%d %b %Y')}. 📚")
+                return redirect('day_detail', semester_id=semester.id, date_str=date_str)
+        else:
+            if form.is_valid():
+                for session in sessions:
+                    field = f'session_{session.id}'
+                    new_status = form.cleaned_data.get(field)
+                    if new_status:
+                        session.status = new_status
+                        session.save(update_fields=['status'])
+                        AttendanceRecord.objects.update_or_create(
+                            session=session,
+                            defaults={'student': request.user, 'status': new_status}
+                        )
+                messages.success(request, f"Attendance marked for {target_date.strftime('%d %B %Y')}. ✅")
+                return redirect('day_detail', semester_id=semester_id, date_str=date_str)
 
     return render(request, 'attendance/calendar/day_detail.html', {
         'semester':    semester,
@@ -331,7 +390,49 @@ def day_detail(request, semester_id, date_str):
         'sessions':    sessions,
         'special_day': special_day,
         'form':        form,
+        'extra_form':  extra_form,
     })
+
+
+@login_required
+def session_delete(request, session_id):
+    """Delete an individual class session instance."""
+    session = get_object_or_404(ClassSession, id=session_id, semester__user=request.user)
+    semester_id = session.semester.id
+    date_str = session.date.isoformat()
+    if request.method == 'POST':
+        subj_name = session.subject.name
+        session.delete()
+        messages.warning(request, f"Session for '{subj_name}' on {date_str} deleted.")
+    return redirect('day_detail', semester_id=semester_id, date_str=date_str)
+
+
+@login_required
+def session_edit(request, session_id):
+    """Edit an individual session's time, status, session type, or notes."""
+    session = get_object_or_404(ClassSession, id=session_id, semester__user=request.user)
+    form = ExtraSessionForm(session.semester, request.POST or None, instance=session)
+    if request.method == 'POST' and form.is_valid():
+        sess = form.save(commit=False)
+        start = datetime.combine(sess.date, sess.start_time)
+        end   = datetime.combine(sess.date, sess.end_time)
+        sess.duration_minutes = max(1, int((end - start).total_seconds() // 60))
+        sess.attendance_weight = (sess.duration_minutes / 60.0) if sess.semester.attendance_policy == 'period' else 1.0
+        sess.save()
+        if sess.status in ('present', 'absent', 'cancelled'):
+            AttendanceRecord.objects.update_or_create(
+                session=sess,
+                defaults={'student': request.user, 'status': sess.status}
+            )
+        messages.success(request, f"Session for '{sess.subject.name}' on {sess.date.strftime('%d %b %Y')} updated.")
+        return redirect('day_detail', semester_id=sess.semester.id, date_str=sess.date.isoformat())
+
+    return render(request, 'attendance/calendar/session_edit.html', {
+        'form':     form,
+        'session':  session,
+        'semester': session.semester,
+    })
+
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -574,6 +675,22 @@ def event_delete(request, event_id):
     return redirect('event_planner', semester_id=semester_id)
 
 
+@login_required
+def event_edit(request, event_id):
+    """Edit a personal event."""
+    event = get_object_or_404(Event, id=event_id, user=request.user)
+    form = EventForm(request.POST or None, instance=event)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        messages.success(request, f"Event '{event.name}' updated.")
+        return redirect('event_planner', semester_id=event.semester.id)
+    return render(request, 'attendance/events/edit.html', {
+        'form': form,
+        'event': event,
+        'semester': event.semester,
+    })
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # Bridge Day Planner
 # ═════════════════════════════════════════════════════════════════════════════
@@ -775,9 +892,37 @@ def special_day_delete(request, day_id):
     sp = get_object_or_404(SpecialDay, id=day_id, semester__user=request.user)
     semester_id = sp.semester.id
     if request.method == 'POST':
+        services.remove_special_day(sp)
         sp.delete()
-        messages.warning(request, f"'{sp.name}' removed.")
+        messages.warning(request, f"'{sp.name}' removed and sessions restored to scheduled.")
     return redirect('special_days', semester_id=semester_id)
+
+
+@login_required
+def populate_holidays_view(request, semester_id):
+    """Auto-populate standard official Indian holidays for the semester."""
+    semester = get_object_or_404(Semester, id=semester_id, user=request.user)
+    if request.method == 'POST':
+        created, skipped = services.populate_official_holidays(semester)
+        messages.success(request, f"Added {created} official holidays to calendar ({skipped} already existed). 🏖️")
+    return redirect('calendar_view', semester_id=semester.id)
+
+
+@login_required
+def special_day_edit(request, day_id):
+    """Edit a special day / holiday / exam record."""
+    sp = get_object_or_404(SpecialDay, id=day_id, semester__user=request.user)
+    form = SpecialDayForm(request.POST or None, instance=sp)
+    if request.method == 'POST' and form.is_valid():
+        sp = form.save()
+        services.apply_special_day(sp)
+        messages.success(request, f"'{sp.name}' updated.")
+        return redirect('special_days', semester_id=sp.semester.id)
+    return render(request, 'attendance/calendar/special_day_edit.html', {
+        'form': form,
+        'special_day': sp,
+        'semester': sp.semester,
+    })
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -789,7 +934,10 @@ def api_session_status(request, session_id):
     """AJAX: update a single session's attendance status."""
     session = get_object_or_404(ClassSession, id=session_id, semester__user=request.user)
     if request.method == 'POST':
-        data       = json.loads(request.body)
+        try:
+            data = json.loads(request.body)
+        except Exception:
+            data = request.POST
         new_status = data.get('status')
         valid      = [s[0] for s in ClassSession.STATUS_CHOICES]
         if new_status not in valid:
@@ -800,5 +948,70 @@ def api_session_status(request, session_id):
             session=session,
             defaults={'student': request.user, 'status': new_status}
         )
-        return JsonResponse({'ok': True, 'status': new_status})
+        return JsonResponse({'ok': True, 'session_id': session.id, 'status': new_status})
     return JsonResponse({'error': 'POST required'}, status=405)
+
+
+@login_required
+def api_day_status(request, semester_id, date_str):
+    """AJAX: update all or specified sessions on a specific date (e.g. Bunk Whole Day)."""
+    semester = get_object_or_404(Semester, id=semester_id, user=request.user)
+    try:
+        target_date = date.fromisoformat(date_str)
+    except ValueError:
+        return JsonResponse({'error': 'Invalid date'}, status=400)
+
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+        except Exception:
+            data = request.POST
+        new_status = data.get('status')
+        session_ids = data.get('session_ids')
+        valid = [s[0] for s in ClassSession.STATUS_CHOICES]
+        if new_status not in valid:
+            return JsonResponse({'error': 'Invalid status'}, status=400)
+
+        updated_count = services.mark_day_sessions(
+            semester=semester,
+            target_date=target_date,
+            status=new_status,
+            user=request.user,
+            session_ids=session_ids
+        )
+        return JsonResponse({'ok': True, 'date': date_str, 'updated': updated_count, 'status': new_status})
+    return JsonResponse({'error': 'POST required'}, status=405)
+
+
+@login_required
+def api_batch_days_status(request, semester_id):
+    """AJAX: update multiple selected dates at once (e.g. from Ctrl+Click selection)."""
+    semester = get_object_or_404(Semester, id=semester_id, user=request.user)
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+        except Exception:
+            data = request.POST
+        dates = data.get('dates', [])
+        status = data.get('status', 'absent')
+        holiday_name = data.get('holiday_name', 'Holiday')
+
+        updated = services.batch_set_days_status(
+            semester=semester,
+            date_strs=dates,
+            status=status,
+            user=request.user,
+            holiday_name=holiday_name
+        )
+        return JsonResponse({'ok': True, 'updated_count': updated, 'status': status})
+    return JsonResponse({'error': 'POST required'}, status=405)
+
+
+@login_required
+def mark_all_past_present_view(request, semester_id):
+    """Mark all past scheduled sessions as present by default."""
+    semester = get_object_or_404(Semester, id=semester_id, user=request.user)
+    if request.method == 'POST':
+        count = services.mark_all_past_as_present(semester, request.user)
+        messages.success(request, f"Updated {count} past sessions to 'Present' by default. ✅")
+    return redirect('calendar_view', semester_id=semester.id)

@@ -68,9 +68,19 @@
                     </button>
                   </form>
                 {% endif %}
+                <a href="{% url 'semester_edit' semester_id=sem.id %}" class="btn-bw-secondary" style="font-size:.75rem;padding:.3rem .6rem;" title="Edit Semester">
+                  <i class="bi bi-pencil"></i>
+                </a>
                 <a href="{% url 'subject_list' semester_id=sem.id %}" class="btn-bw-secondary" style="font-size:.75rem;padding:.3rem .7rem;">
                   <i class="bi bi-arrow-right"></i> Open
                 </a>
+                <form method="post" action="{% url 'semester_delete' semester_id=sem.id %}"
+                      onsubmit="return confirm('Delete semester {{ sem.name }}? This will permanently delete all associated subjects, timetable, and attendance records.');">
+                  {% csrf_token %}
+                  <button type="submit" class="btn-bw-danger" style="font-size:.75rem;padding:.3rem .6rem;" title="Delete Semester">
+                    <i class="bi bi-trash3"></i>
+                  </button>
+                </form>
               </div>
             </div>
             <!-- Progress bar -->

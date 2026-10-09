@@ -26,35 +26,69 @@
 
   <div class="bw-card fade-up fade-up-delay-1">
     {% if sessions %}
-      <form method="post" novalidate>
+      <form method="post" id="dayAttendanceForm" novalidate>
         {% csrf_token %}
-        <div class="section-header mb-3">
-          <h2><i class="bi bi-check2-all text-accent"></i> {{ sessions|length }} Session{{ sessions|length|pluralize }}</h2>
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+          <h2 style="font-size:1.1rem;font-weight:700;color:#fff;margin:0;">
+            <i class="bi bi-check2-all text-accent"></i> {{ sessions|length }} Session{{ sessions|length|pluralize }}
+          </h2>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn-bw-danger" style="font-size:.75rem;padding:.3rem .7rem;" onclick="setAllSessions('absent')">
+              <i class="bi bi-x-circle"></i> Bunk Whole Day
+            </button>
+            <button type="button" class="btn-bw-primary" style="font-size:.75rem;padding:.3rem .7rem;" onclick="setAllSessions('present')">
+              <i class="bi bi-check2-all"></i> Mark All Present
+            </button>
+          </div>
         </div>
 
         {% for session in sessions %}
-          <div class="subject-row mb-3">
-            <div class="d-flex align-items-start gap-3 flex-wrap">
-              <div style="width:3px;height:60px;background:{{ session.subject.color }};border-radius:2px;flex-shrink:0;margin-top:4px;"></div>
+          <div class="subject-row mb-3 p-3 rounded" style="background:var(--bg-glass);border:1px solid var(--border-color);border-left:4px solid {{ session.subject.color }};">
+            <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
               <div class="flex-grow-1">
-                <div style="font-size:.95rem;font-weight:700;color:#fff;">
-                  {{ session.subject.icon }} {{ session.subject.name }}
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                  <span style="font-size:1.1rem;">{{ session.subject.icon }}</span>
+                  <span style="font-size:.95rem;font-weight:700;color:#fff;">{{ session.subject.name }}</span>
+                  {% if session.session_type == 'lab' %}
+                    <span class="badge" style="background:rgba(129,140,248,0.2);color:#818cf8;font-size:.68rem;">🔬 Lab</span>
+                  {% elif session.session_type == 'tutorial' %}
+                    <span class="badge" style="background:rgba(245,158,11,0.2);color:#f59e0b;font-size:.68rem;">📝 Tutorial</span>
+                  {% else %}
+                    <span class="badge" style="background:rgba(255,255,255,0.08);color:var(--text-secondary);font-size:.68rem;">📖 Lecture</span>
+                  {% endif %}
+                  {% if session.notes %}
+                    <span class="badge" style="background:rgba(236,72,153,0.15);color:#ec4899;font-size:.68rem;"><i class="bi bi-sticky"></i> {{ session.notes }}</span>
+                  {% endif %}
                 </div>
-                <div style="font-size:.75rem;color:var(--text-muted);">
-                  {{ session.start_time|time:"H:i" }} – {{ session.end_time|time:"H:i" }}
+                <div style="font-size:.75rem;color:var(--text-muted);margin-top:.25rem;">
+                  <i class="bi bi-clock"></i> {{ session.start_time|time:"H:i" }} – {{ session.end_time|time:"H:i" }}
                   &nbsp;·&nbsp; {{ session.duration_minutes|duration_fmt }}
                   {% if session.subject.code %}&nbsp;·&nbsp; {{ session.subject.code }}{% endif %}
                 </div>
-                <div style="font-size:.72rem;color:var(--text-muted);margin-top:.2rem;">
-                  Weight: {{ session.attendance_weight }}
-                  &nbsp;·&nbsp; Policy: {{ semester.get_attendance_policy_display }}
+                <div style="font-size:.72rem;color:var(--text-muted);margin-top:.15rem;">
+                  Weight: {{ session.attendance_weight }} &nbsp;·&nbsp; Policy: {{ semester.get_attendance_policy_display }}
                 </div>
               </div>
-              <!-- Status selector -->
-              <div style="min-width:160px;">
+
+              <!-- Quick Status Selector & Buttons -->
+              <div class="d-flex flex-column align-items-end gap-2" style="min-width:180px;">
                 {% with field_name="session_"|add:session.id|stringformat:"s" %}
                   {{ form|get_field:field_name }}
                 {% endwith %}
+                <div class="d-flex align-items-center gap-1 w-100">
+                  <div class="btn-group btn-group-sm flex-grow-1" role="group">
+                    <button type="button" class="btn btn-outline-success" style="font-size:.7rem;padding:.2rem .4rem;"
+                            onclick="setSessionValue('{{ session.id }}', 'present')">Present</button>
+                    <button type="button" class="btn btn-outline-danger" style="font-size:.7rem;padding:.2rem .4rem;"
+                            onclick="setSessionValue('{{ session.id }}', 'absent')">Bunk</button>
+                    <button type="button" class="btn btn-outline-secondary" style="font-size:.7rem;padding:.2rem .4rem;"
+                            onclick="setSessionValue('{{ session.id }}', 'cancelled')">Cancel</button>
+                  </div>
+                  <!-- Edit Session -->
+                  <a href="{% url 'session_edit' session_id=session.id %}" class="btn-bw-secondary" style="font-size:.7rem;padding:.2rem .4rem;" title="Edit details">
+                    <i class="bi bi-pencil"></i>
+                  </a>
+                </div>
               </div>
             </div>
           </div>
@@ -70,14 +104,86 @@
         </div>
       </form>
     {% else %}
-      <div class="empty-state">
+      <div class="empty-state py-4">
         <div class="icon">📭</div>
-        <p>No sessions scheduled for this day.</p>
-        <a href="{% url 'calendar_view' semester_id=semester.id %}" class="btn-bw-secondary mt-2 d-inline-flex">
+        <p class="mb-3">No sessions scheduled for this day.</p>
+        <a href="{% url 'calendar_view' semester_id=semester.id %}" class="btn-bw-secondary d-inline-flex">
           <i class="bi bi-arrow-left"></i> Back to Calendar
         </a>
       </div>
     {% endif %}
+
+    <!-- Add Extra / Makeup Class Section -->
+    <div class="mt-4 pt-3" style="border-top:1px solid var(--border-color);">
+      <button type="button" class="btn-bw-secondary w-100 justify-content-center" data-bs-toggle="collapse" data-bs-target="#addExtraSessionCollapse">
+        <i class="bi bi-plus-circle"></i> Add Extra / Makeup Class Session
+      </button>
+
+      <div class="collapse mt-3" id="addExtraSessionCollapse">
+        <div class="p-3 rounded" style="background:rgba(255,255,255,0.03);border:1px solid var(--border-color);">
+          <h4 style="font-size:.9rem;font-weight:700;color:var(--accent-light);margin-bottom:.8rem;">
+            <i class="bi bi-plus"></i> New Class Session for {{ date|date:"d M Y" }}
+          </h4>
+          <form method="post" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add_extra">
+            {% for field in extra_form %}
+              <div class="mb-2">
+                <label class="form-label" style="font-size:.78rem;">{{ field.label }}</label>
+                {{ field }}
+                {% if field.errors %}
+                  <div style="font-size:.72rem;color:var(--critical);">{{ field.errors.0 }}</div>
+                {% endif %}
+              </div>
+            {% endfor %}
+            <button type="submit" class="btn-bw-primary w-100 justify-content-center mt-3" style="font-size:.82rem;">
+              <i class="bi bi-check2"></i> Add Extra Class Session
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function setSessionValue(sessionId, val) {
+  const select = document.querySelector(`select[name="session_${sessionId}"]`);
+  if (select) {
+    select.value = val;
+    highlightSelect(select);
+  }
+}
+
+function setAllSessions(val) {
+  document.querySelectorAll('select[name^="session_"]').forEach(select => {
+    select.value = val;
+    highlightSelect(select);
+  });
+}
+
+function highlightSelect(select) {
+  select.style.transition = 'border-color 0.3s, background-color 0.3s';
+  if (select.value === 'absent') {
+    select.style.borderColor = '#ef4444';
+    select.style.backgroundColor = 'rgba(239,68,68,0.15)';
+  } else if (select.value === 'present') {
+    select.style.borderColor = '#22c55e';
+    select.style.backgroundColor = 'rgba(34,197,94,0.15)';
+  } else {
+    select.style.borderColor = 'var(--border-color)';
+    select.style.backgroundColor = '';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('select[name^="session_"]').forEach(highlightSelect);
+  document.querySelectorAll('select[name^="session_"]').forEach(sel => {
+    sel.addEventListener('change', () => highlightSelect(sel));
+  });
+});
+</script>
 {% endblock %}

@@ -177,3 +177,33 @@ class EventForm(forms.ModelForm):
         if start and end and end < start:
             raise forms.ValidationError("End date cannot be before start date.")
         return cleaned
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Extra / Ad-hoc Class Session Form
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ExtraSessionForm(forms.ModelForm):
+    class Meta:
+        model  = ClassSession
+        fields = ['subject', 'session_type', 'start_time', 'end_time', 'status', 'notes']
+        widgets = {
+            'subject':      forms.Select(attrs={'class': 'form-select'}),
+            'session_type': forms.Select(attrs={'class': 'form-select'}),
+            'start_time':   forms.TimeInput(attrs={'type': 'time', 'class': 'form-control'}),
+            'end_time':     forms.TimeInput(attrs={'type': 'time', 'class': 'form-control'}),
+            'status':       forms.Select(attrs={'class': 'form-select'}),
+            'notes':        forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. Extra class / Makeup session'}),
+        }
+
+    def __init__(self, semester, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['subject'].queryset = Subject.objects.filter(semester=semester)
+
+    def clean(self):
+        cleaned = super().clean()
+        start = cleaned.get('start_time')
+        end   = cleaned.get('end_time')
+        if start and end and end <= start:
+            raise forms.ValidationError("End time must be after start time.")
+        return cleaned
