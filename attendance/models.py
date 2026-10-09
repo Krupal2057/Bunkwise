@@ -87,6 +87,10 @@ class Subject(models.Model):
     name            = models.CharField(max_length=150)
     code            = models.CharField(max_length=20, blank=True)
     subject_type    = models.CharField(max_length=10, choices=TYPE_CHOICES, default='lecture')
+    has_lab         = models.BooleanField(
+                          default=False,
+                          help_text="Enable if this subject includes lab / practical sessions"
+                      )
     min_attendance  = models.FloatField(
                           null=True, blank=True,
                           validators=[MinValueValidator(0.0), MaxValueValidator(100.0)],
@@ -124,19 +128,26 @@ class TimetableEntry(models.Model):
         (5, 'Saturday'),
         (6, 'Sunday'),
     ]
+    SESSION_TYPE_CHOICES = [
+        ('lecture',  'Lecture'),
+        ('lab',      'Lab / Practical'),
+        ('tutorial', 'Tutorial'),
+        ('other',    'Other'),
+    ]
 
-    semester    = models.ForeignKey(Semester, on_delete=models.CASCADE, related_name='timetable_entries')
-    subject     = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='timetable_entries')
-    day_of_week = models.IntegerField(choices=DAY_CHOICES)
-    start_time  = models.TimeField()
-    end_time    = models.TimeField()
-    room        = models.CharField(max_length=50, blank=True)
+    semester     = models.ForeignKey(Semester, on_delete=models.CASCADE, related_name='timetable_entries')
+    subject      = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='timetable_entries')
+    session_type = models.CharField(max_length=10, choices=SESSION_TYPE_CHOICES, default='lecture')
+    day_of_week  = models.IntegerField(choices=DAY_CHOICES)
+    start_time   = models.TimeField()
+    end_time     = models.TimeField()
+    room         = models.CharField(max_length=50, blank=True)
 
     class Meta:
         ordering = ['day_of_week', 'start_time']
 
     def __str__(self):
-        return f"{self.get_day_of_week_display()} {self.start_time}–{self.end_time}: {self.subject.name}"
+        return f"{self.get_day_of_week_display()} {self.start_time}–{self.end_time}: {self.subject.name} ({self.get_session_type_display()})"
 
     @property
     def duration_minutes(self):
@@ -175,9 +186,16 @@ class ClassSession(models.Model):
         ('event',      'College Event'),
         ('modified',   'Modified'),
     ]
+    SESSION_TYPE_CHOICES = [
+        ('lecture',  'Lecture'),
+        ('lab',      'Lab / Practical'),
+        ('tutorial', 'Tutorial'),
+        ('other',    'Other'),
+    ]
 
     semester         = models.ForeignKey(Semester, on_delete=models.CASCADE, related_name='sessions')
     subject          = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='sessions')
+    session_type     = models.CharField(max_length=10, choices=SESSION_TYPE_CHOICES, default='lecture')
     timetable_entry  = models.ForeignKey(
                            TimetableEntry, on_delete=models.SET_NULL,
                            null=True, blank=True, related_name='sessions'

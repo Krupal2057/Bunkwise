@@ -189,6 +189,10 @@ def timetable_view(request, semester_id):
         return redirect('timetable', semester_id=semester.id)
 
     day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    days = {i: [] for i in range(7)}
+    for entry in entries:
+        days[entry.day_of_week].append(entry)
+
     day_schedule = [
         {'dow': i, 'name': day_names[i], 'entries': days[i]}
         for i in range(7)

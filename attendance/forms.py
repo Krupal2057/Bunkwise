@@ -66,11 +66,12 @@ class SemesterForm(forms.ModelForm):
 class SubjectForm(forms.ModelForm):
     class Meta:
         model  = Subject
-        fields = ['name', 'code', 'subject_type', 'min_attendance', 'color', 'icon']
+        fields = ['name', 'code', 'subject_type', 'has_lab', 'min_attendance', 'color', 'icon']
         widgets = {
             'name':           forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. Data Structures'}),
             'code':           forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. CS301'}),
             'subject_type':   forms.Select(attrs={'class': 'form-select'}),
+            'has_lab':        forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'min_attendance': forms.NumberInput(attrs={'class': 'form-control', 'min': 0, 'max': 100, 'step': 0.5,
                                                        'placeholder': 'Leave blank for semester default'}),
             'color':          forms.TextInput(attrs={'type': 'color', 'class': 'form-control form-control-color'}),
@@ -85,13 +86,14 @@ class SubjectForm(forms.ModelForm):
 class TimetableEntryForm(forms.ModelForm):
     class Meta:
         model  = TimetableEntry
-        fields = ['subject', 'day_of_week', 'start_time', 'end_time', 'room']
+        fields = ['subject', 'session_type', 'day_of_week', 'start_time', 'end_time', 'room']
         widgets = {
-            'subject':     forms.Select(attrs={'class': 'form-select'}),
-            'day_of_week': forms.Select(attrs={'class': 'form-select'}),
-            'start_time':  forms.TimeInput(attrs={'type': 'time', 'class': 'form-control'}),
-            'end_time':    forms.TimeInput(attrs={'type': 'time', 'class': 'form-control'}),
-            'room':        forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. Room 204'}),
+            'subject':      forms.Select(attrs={'class': 'form-select'}),
+            'session_type': forms.Select(attrs={'class': 'form-select'}),
+            'day_of_week':  forms.Select(attrs={'class': 'form-select'}),
+            'start_time':   forms.TimeInput(attrs={'type': 'time', 'class': 'form-control'}),
+            'end_time':     forms.TimeInput(attrs={'type': 'time', 'class': 'form-control'}),
+            'room':         forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. Room 204 / Lab 3'}),
         }
 
     def __init__(self, semester, *args, **kwargs):

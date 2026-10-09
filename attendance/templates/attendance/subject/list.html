@@ -86,7 +86,7 @@
                 </div>
               </div>
               <!-- Color swatch -->
-              <div style="width:24px;height:24px;border-radius:6px;background-color:{{ subj.color }};border:1px solid rgba(255,255,255,.1);flex-shrink:0;"></div>
+              <div style="--subj-color: {{ subj.color }}; width: 24px; height: 24px; border-radius: 6px; background-color: var(--subj-color); border: 1px solid rgba(255, 255, 255, 0.1); flex-shrink: 0;"></div>
               <!-- Actions -->
               <div class="d-flex gap-2">
                 <a href="{% url 'subject_edit' subject_id=subj.id %}" class="btn-bw-secondary" style="font-size:.75rem;padding:.3rem .6rem;" title="Edit">

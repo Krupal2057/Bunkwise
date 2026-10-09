@@ -157,6 +157,26 @@ class BunkWiseViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "CS401")
 
+    def test_timetable_view(self):
+        self.client.login(username='teststudent', password='password123')
+        # Create a timetable entry to verify display
+        TimetableEntry.objects.create(
+            semester=self.semester,
+            subject=self.subject,
+            day_of_week=0,
+            start_time=time(9, 0),
+            end_time=time(10, 0),
+        )
+        response = self.client.get(reverse('timetable', args=[self.semester.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Weekly Schedule")
+        self.assertContains(response, "Database Systems")
+
+    def test_simulator_view(self):
+        self.client.login(username='teststudent', password='password123')
+        response = self.client.get(reverse('simulator', args=[self.semester.id]))
+        self.assertEqual(response.status_code, 200)
+
     def test_optimizer_view(self):
         self.client.login(username='teststudent', password='password123')
         response = self.client.get(reverse('optimizer', args=[self.semester.id]))
@@ -201,10 +221,10 @@ class BunkWiseViewsTests(TestCase):
 
         # Simulating bunking 2 sessions -> conducted becomes 12, attended stays 8 -> 8/12 = 66.67%
         res = services.simulate_absences([fut1.id, fut2.id])
-        self.assertIn(self.subject, res['by_subject'])
-        subj_res = res['by_subject'][self.subject]
-        self.assertEqual(subj_res['current_percentage'], 80.0)
-        self.assertAlmostEqual(subj_res['projected_percentage'], 66.67, places=1)
+        self.assertIn(self.subject.id, res)
+        subj_res = res[self.subject.id]
+        self.assertEqual(subj_res['current_pct'], 80.0)
+        self.assertAlmostEqual(subj_res['projected_pct'], 66.67, places=1)
         self.assertEqual(subj_res['projected_risk'], 'CRITICAL')
 
         # Real session statuses in DB must remain 'scheduled'

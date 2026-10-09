@@ -46,6 +46,7 @@ def generate_sessions(semester):
                 timetable_entry=entry,
                 date=current,
                 defaults={
+                    'session_type':      entry.session_type,
                     'start_time':        entry.start_time,
                     'end_time':          entry.end_time,
                     'duration_minutes':  duration,
