@@ -1,17 +1,72 @@
 {% load bunkwise_tags %}
-{% for subj_id, res in impact.items %}
-  <div class="d-flex align-items-center gap-3 mb-2 py-1" style="border-bottom:1px solid var(--border-color);">
-    <div style="flex:1;font-size:.8rem;color:#fff;font-weight:600;">{{ res.subject_name }}</div>
-    <div style="font-size:.78rem;">
-      <span style="color:var(--text-muted);">{{ res.current_pct }}%</span>
-      <span style="color:var(--text-muted);margin:0 .3rem;">→</span>
-      <span style="font-weight:700;
-                   color:{% if res.projected_risk == 'SAFE' %}var(--safe){% elif res.projected_risk == 'CAUTION' %}var(--caution){% else %}var(--critical){% endif %};">
-        {{ res.projected_pct }}%
-      </span>
-    </div>
-    <span class="risk-badge risk-{{ res.projected_risk }}">{{ res.projected_risk }}</span>
-  </div>
-{% empty %}
-  <div style="font-size:.8rem;color:var(--text-muted);">No sessions affected.</div>
-{% endfor %}
+<div class="d-flex flex-column gap-2">
+  {% for subj_id, res in impact.items %}
+    <a href="{% url 'attendance_overview' semester_id=semester.id %}#subject-{{ res.subject_id|default:subj_id }}"
+       class="d-flex align-items-center justify-content-between gap-3 p-2 rounded text-decoration-none"
+       style="background:rgba(255,255,255,0.02);border:1px solid var(--border-color);transition:var(--transition);cursor:pointer;"
+       onmouseover="this.style.borderColor='var(--border-glow)';this.style.background='rgba(255,255,255,0.06)';"
+       onmouseout="this.style.borderColor='var(--border-color)';this.style.background='rgba(255,255,255,0.02)';"
+       title="Click to view full attendance details for {{ res.subject_name }}">
+      
+      <!-- Subject info -->
+      <div class="d-flex align-items-center gap-2" style="min-width:180px;">
+        <span class="subject-dot" style="background:{{ res.subject_color|default:'var(--accent)' }};"></span>
+        <div>
+          <div style="font-size:.85rem;color:#fff;font-weight:600;">{{ res.subject_name }}</div>
+          {% if res.subject_code %}
+            <div style="font-size:.7rem;color:var(--text-muted);">{{ res.subject_code }}</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Skipped status badge -->
+      <div>
+        {% if res.weight_lost > 0 %}
+          <span class="badge" style="font-size:.65rem;background:rgba(239,68,68,0.18);color:#f87171;border:1px solid rgba(239,68,68,0.3);">
+            -{{ res.weight_lost }} skipped
+          </span>
+        {% else %}
+          <span class="badge" style="font-size:.65rem;background:rgba(16,185,129,0.12);color:#34d399;border:1px solid rgba(16,185,129,0.25);">
+            No skips
+          </span>
+        {% endif %}
+      </div>
+
+      <!-- Attendance drop & Semester end projection -->
+      <div class="text-center" style="font-size:.78rem;">
+        <div style="color:var(--text-muted);font-size:.68rem;">Current → Immediate</div>
+        <div>
+          <span style="color:var(--text-muted);">{{ res.current_pct }}%</span>
+          <span style="color:var(--text-muted);margin:0 .2rem;">→</span>
+          <span style="font-weight:700;color:{% if res.projected_risk == 'SAFE' %}var(--safe){% elif res.projected_risk == 'CAUTION' %}var(--caution){% else %}var(--critical){% endif %};">
+            {{ res.projected_pct }}%
+          </span>
+        </div>
+      </div>
+
+      <!-- Final semester projection -->
+      <div class="text-center" style="font-size:.78rem;">
+        <div style="color:var(--text-muted);font-size:.68rem;">Semester End</div>
+        <div style="font-weight:700;color:{% if res.final_risk == 'SAFE' %}var(--safe){% elif res.final_risk == 'CAUTION' %}var(--caution){% else %}var(--critical){% endif %};">
+          {{ res.final_pct }}%
+        </div>
+      </div>
+
+      <!-- Safe bunks remaining till semester end -->
+      <div class="text-end d-none d-md-block" style="font-size:.75rem;">
+        <div style="color:var(--text-muted);font-size:.68rem;">Safe Bunks Left</div>
+        <div style="font-weight:700;color:var(--accent);">
+          {{ res.final_safe_after }} left
+        </div>
+      </div>
+
+      <!-- Risk badge & link arrow -->
+      <div class="d-flex align-items-center gap-2">
+        <span class="risk-badge risk-{{ res.projected_risk }}">{{ res.projected_risk }}</span>
+        <i class="bi bi-chevron-right" style="color:var(--text-muted);font-size:.75rem;"></i>
+      </div>
+    </a>
+  {% empty %}
+    <div style="font-size:.8rem;color:var(--text-muted);padding:.5rem;">No subjects found.</div>
+  {% endfor %}
+</div>

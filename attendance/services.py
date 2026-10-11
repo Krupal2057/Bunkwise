@@ -81,44 +81,69 @@ def calculate_attendance(subject):
     Unifies all session types (lectures, labs, tutorials) into the subject's overall total attendance,
     and provides a detailed breakdown per session type (lecture, lab, tutorial).
     Uses attendance_weight for period-based policy.
+    Optimized for single-query in-memory evaluation.
     """
     from attendance.models import ClassSession
 
-    sessions = ClassSession.objects.filter(
+    sessions = list(ClassSession.objects.filter(
         subject=subject,
         status__in=['present', 'absent']
-    )
+    ))
 
-    conducted_w = sum(s.attendance_weight for s in sessions)
-    attended_w  = sum(s.attendance_weight for s in sessions if s.status == 'present')
-    absent_w    = sum(s.attendance_weight for s in sessions if s.status == 'absent')
+    conducted_w = 0.0
+    attended_w  = 0.0
+    absent_w    = 0.0
+    raw_conducted = len(sessions)
+    raw_attended  = 0
+    raw_absent    = 0
 
-    raw_conducted = sessions.count()
-    raw_attended  = sessions.filter(status='present').count()
-    raw_absent    = sessions.filter(status='absent').count()
+    lec_conducted = 0
+    lec_attended  = 0
+    lec_absent    = 0
+
+    lab_conducted = 0
+    lab_attended  = 0
+    lab_absent    = 0
+
+    tut_conducted = 0
+    tut_attended  = 0
+    tut_absent    = 0
+
+    for s in sessions:
+        w = s.attendance_weight
+        conducted_w += w
+        is_present = (s.status == 'present')
+        if is_present:
+            attended_w += w
+            raw_attended += 1
+        else:
+            absent_w += w
+            raw_absent += 1
+
+        stype = s.session_type
+        if stype == 'lecture':
+            lec_conducted += 1
+            if is_present:
+                lec_attended += 1
+            else:
+                lec_absent += 1
+        elif stype == 'lab':
+            lab_conducted += 1
+            if is_present:
+                lab_attended += 1
+            else:
+                lab_absent += 1
+        elif stype == 'tutorial':
+            tut_conducted += 1
+            if is_present:
+                tut_attended += 1
+            else:
+                tut_absent += 1
 
     percentage = (attended_w / conducted_w * 100) if conducted_w > 0 else 0.0
-
-    # Lecture breakdown
-    lecture_sessions = sessions.filter(session_type='lecture')
-    lec_conducted = lecture_sessions.count()
-    lec_attended  = lecture_sessions.filter(status='present').count()
-    lec_absent    = lecture_sessions.filter(status='absent').count()
-    lec_pct       = round((lec_attended / lec_conducted * 100), 2) if lec_conducted > 0 else 0.0
-
-    # Lab breakdown
-    lab_sessions  = sessions.filter(session_type='lab')
-    lab_conducted = lab_sessions.count()
-    lab_attended  = lab_sessions.filter(status='present').count()
-    lab_absent    = lab_sessions.filter(status='absent').count()
-    lab_pct       = round((lab_attended / lab_conducted * 100), 2) if lab_conducted > 0 else 0.0
-
-    # Tutorial breakdown
-    tut_sessions  = sessions.filter(session_type='tutorial')
-    tut_conducted = tut_sessions.count()
-    tut_attended  = tut_sessions.filter(status='present').count()
-    tut_absent    = tut_sessions.filter(status='absent').count()
-    tut_pct       = round((tut_attended / tut_conducted * 100), 2) if tut_conducted > 0 else 0.0
+    lec_pct = round((lec_attended / lec_conducted * 100), 2) if lec_conducted > 0 else 0.0
+    lab_pct = round((lab_attended / lab_conducted * 100), 2) if lab_conducted > 0 else 0.0
+    tut_pct = round((tut_attended / tut_conducted * 100), 2) if tut_conducted > 0 else 0.0
 
     return {
         'conducted':        round(conducted_w, 2),
@@ -179,16 +204,20 @@ def classify_risk(att_data):
 # Bunk Budget
 # ─────────────────────────────────────────────────────────────────────────────
 
-def calculate_bunk_budget(subject, att_data=None):
+def calculate_bunk_budget(subject, att_data=None, consider_future=True):
     """
     Maximum additional absences the student can afford while staying above
     the minimum required attendance.
 
-    Formula:
-        safe = floor((attended - threshold × conducted) / threshold)
-    where threshold = min_required / 100
+    When future scheduled sessions exist in the semester (consider_future=True),
+    calculates safe absences by considering all sessions till the end date of the semester:
+        safe = floor( (attended + remaining_w) - threshold * (conducted + remaining_w) )
+    constrained between 0 and remaining_count.
 
-    Returns 0 if the student is already at or below the required threshold.
+    If no future sessions exist or consider_future=False:
+        safe = floor((attended - threshold * conducted) / threshold)
+
+    Returns 0 if the student cannot afford any absences.
     Never returns negative.
     """
     if att_data is None:
@@ -198,11 +227,23 @@ def calculate_bunk_budget(subject, att_data=None):
     conducted = att_data['conducted']
     threshold = att_data['min_required'] / 100.0
 
-    if conducted == 0:
-        return 0
-
     if threshold == 0:
         return 999  # No minimum — unlimited
+
+    if consider_future and subject:
+        from attendance.models import ClassSession
+        remaining_qs = ClassSession.objects.filter(subject=subject, status='scheduled')
+        remaining_count = remaining_qs.count()
+        if remaining_count > 0:
+            remaining_w = sum(s.attendance_weight for s in remaining_qs)
+            total_conducted = conducted + remaining_w
+            if total_conducted == 0:
+                return 0
+            safe_w = (attended + remaining_w) - (threshold * total_conducted)
+            return max(0, min(remaining_count, math.floor(safe_w)))
+
+    if conducted == 0:
+        return 0
 
     safe = (attended - threshold * conducted) / threshold
     return max(0, math.floor(safe))
@@ -273,21 +314,31 @@ def get_remaining_sessions_count(semester, from_date=None):
 # Simulation Engine (What-if — does NOT modify real data)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def simulate_absences(session_ids):
+def simulate_absences(session_ids, semester=None, all_subjects=True):
     """
     Given a list of ClassSession IDs to simulate as absent, return projected
-    attendance per subject.
+    attendance per subject, including immediate impact and end-of-semester final projection.
+    If all_subjects is True and semester is available, includes results for all subjects
+    in the semester (with weight_lost=0 for unaffected subjects).
 
     Returns:
         {
             subject_id: {
-                'subject_name':   str,
-                'current_pct':    float,
-                'projected_pct':  float,
-                'current_risk':   str,
-                'projected_risk': str,
-                'weight_lost':    float,
-                'safe_after':     int,
+                'subject_name':        str,
+                'current_pct':         float,
+                'projected_pct':       float,
+                'current_risk':        str,
+                'projected_risk':      str,
+                'weight_lost':         float,
+                'safe_after':          int,
+                'min_required':        float,
+                'final_pct':           float,
+                'final_risk':          str,
+                'final_conducted':     float,
+                'final_attended':      float,
+                'remaining_sessions':  int,
+                'remaining_weight':    float,
+                'final_safe_after':    int,
             },
             ...
         }
@@ -300,18 +351,32 @@ def simulate_absences(session_ids):
 
     # Group weight lost per subject
     weight_lost_per_subject = {}
+    semester_ids = set()
     for s in sessions:
         sid = s.subject_id
         weight_lost_per_subject[sid] = weight_lost_per_subject.get(sid, 0) + s.attendance_weight
+        semester_ids.add(s.semester_id)
+
+    # Infer semester if not provided
+    if semester is None and semester_ids:
+        from attendance.models import Semester
+        if len(semester_ids) == 1:
+            semester = Semester.objects.filter(id=list(semester_ids)[0]).first()
 
     result = {}
-    # Collect all affected subjects
-    subject_ids = set(weight_lost_per_subject.keys())
+    if all_subjects and semester:
+        subjects_qs = semester.subjects.all().order_by('name')
+    else:
+        subject_ids = set(weight_lost_per_subject.keys())
+        subjects_qs = Subject.objects.filter(id__in=subject_ids).order_by('name')
 
-    for subject in Subject.objects.filter(id__in=subject_ids):
+    session_ids_set = set(session_ids)
+
+    for subject in subjects_qs:
         att = calculate_attendance(subject)
         weight_lost = weight_lost_per_subject.get(subject.id, 0)
 
+        # 1. Immediate Impact (Classes conducted so far + selected skipped classes)
         proj_conducted = att['conducted'] + weight_lost
         proj_attended  = att['attended']
         proj_pct = (proj_attended / proj_conducted * 100) if proj_conducted > 0 else 0.0
@@ -325,21 +390,53 @@ def simulate_absences(session_ids):
             'effective_target': att['effective_target'],
         }
 
+        # 2. End-of-Semester Projection (All scheduled sessions till semester end)
+        scheduled_sessions = list(ClassSession.objects.filter(subject=subject, status='scheduled'))
+        remaining_count = len(scheduled_sessions)
+        total_scheduled_weight = sum(s.attendance_weight for s in scheduled_sessions)
+        simulated_absent_weight = sum(s.attendance_weight for s in scheduled_sessions if s.id in session_ids_set)
+        # Assuming all remaining unselected future sessions are attended:
+        future_attended_weight = total_scheduled_weight - simulated_absent_weight
+
+        final_conducted = att['conducted'] + total_scheduled_weight
+        final_attended  = att['attended'] + future_attended_weight
+        final_pct = (final_attended / final_conducted * 100) if final_conducted > 0 else 0.0
+
+        final_att = {
+            'conducted':        final_conducted,
+            'attended':         final_attended,
+            'absent':           final_conducted - final_attended,
+            'percentage':       round(final_pct, 2),
+            'min_required':     att['min_required'],
+            'effective_target': att['effective_target'],
+        }
+
         result[subject.id] = {
-            'subject_name':   str(subject),
-            'current_pct':    att['percentage'],
-            'projected_pct':  round(proj_pct, 2),
-            'current_risk':   classify_risk(att),
-            'projected_risk': classify_risk(proj_att),
-            'weight_lost':    round(weight_lost, 2),
-            'safe_after':     calculate_bunk_budget(subject, proj_att),
-            'min_required':   att['min_required'],
+            'subject_id':          subject.id,
+            'subject_name':        str(subject),
+            'subject_code':        subject.code,
+            'subject_icon':        subject.icon,
+            'subject_color':       subject.color,
+            'current_pct':         att['percentage'],
+            'projected_pct':       round(proj_pct, 2),
+            'current_risk':        classify_risk(att),
+            'projected_risk':      classify_risk(proj_att),
+            'weight_lost':         round(weight_lost, 2),
+            'safe_after':          calculate_bunk_budget(subject, proj_att),
+            'min_required':        att['min_required'],
+            'final_pct':           round(final_pct, 2),
+            'final_risk':          classify_risk(final_att),
+            'final_conducted':     round(final_conducted, 2),
+            'final_attended':      round(final_attended, 2),
+            'remaining_sessions':  remaining_count,
+            'remaining_weight':    round(total_scheduled_weight, 2),
+            'final_safe_after':    calculate_bunk_budget(subject, final_att),
         }
 
     return result
 
 
-def simulate_date_range(semester, start_date, end_date):
+def simulate_date_range(semester, start_date, end_date, all_subjects=True):
     """
     Simulate being absent for ALL scheduled sessions between start_date and end_date.
     Returns same structure as simulate_absences().
@@ -350,7 +447,7 @@ def simulate_date_range(semester, start_date, end_date):
         date__range=(start_date, end_date),
         status='scheduled'
     )
-    return simulate_absences(list(sessions.values_list('id', flat=True)))
+    return simulate_absences(list(sessions.values_list('id', flat=True)), semester=semester, all_subjects=all_subjects)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -394,7 +491,7 @@ def find_bridge_days(semester):
 
             if day_sessions.exists():
                 session_ids = list(day_sessions.values_list('id', flat=True))
-                impact = simulate_absences(session_ids)
+                impact = simulate_absences(session_ids, semester=semester, all_subjects=True)
                 bridges.append({
                     'date':     current,
                     'sessions': list(day_sessions),
@@ -431,10 +528,16 @@ def get_dashboard_data(user):
     total_bunk_budget = 0
 
     for subj in subjects:
-        att  = calculate_attendance(subj)
-        risk = classify_risk(att)
-        bunk = calculate_bunk_budget(subj, att)
+        att   = calculate_attendance(subj)
+        risk  = classify_risk(att)
+        bunk  = calculate_bunk_budget(subj, att)
         recov = recovery_sessions_needed(subj, att)
+
+        future_qs = get_future_sessions(subj, from_date=today)
+        remaining_count = future_qs.count()
+        remaining_w = sum(s.attendance_weight for s in future_qs)
+        total_conducted_sub = att['conducted'] + remaining_w
+        final_pct_sub = round(((att['attended'] + remaining_w) / total_conducted_sub * 100), 2) if total_conducted_sub > 0 else 0.0
 
         if risk in ('CAUTION', 'CRITICAL'):
             at_risk_count += 1
@@ -444,11 +547,14 @@ def get_dashboard_data(user):
         total_bunk_budget += bunk
 
         subject_data.append({
-            'subject':  subj,
-            'att':      att,
-            'risk':     risk,
-            'bunk':     bunk,
-            'recovery': recov,
+            'subject':            subj,
+            'att':                att,
+            'risk':               risk,
+            'bunk':               bunk,
+            'recovery':           recov,
+            'remaining_sessions': remaining_count,
+            'total_sessions':     att['raw_conducted'] + remaining_count,
+            'final_pct':          final_pct_sub,
         })
 
     overall_pct = (

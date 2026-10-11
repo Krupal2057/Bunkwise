@@ -71,8 +71,6 @@
               <ul class="dropdown-menu dropdown-menu-dark border-0"
                   style="background:#1a1a2e; border:1px solid rgba(129,140,248,0.2)!important;">
                 {% if semester_id %}
-                  <li><a class="dropdown-item" href="{% url 'simulator' semester_id=semester_id %}">
-                    <i class="bi bi-play-circle me-2 text-accent"></i>What-if Simulator</a></li>
                   <li><a class="dropdown-item" href="{% url 'optimizer' semester_id=semester_id %}">
                     <i class="bi bi-stars me-2 text-accent"></i>Bunk Optimizer</a></li>
                   <li><a class="dropdown-item" href="{% url 'event_planner' semester_id=semester_id %}">

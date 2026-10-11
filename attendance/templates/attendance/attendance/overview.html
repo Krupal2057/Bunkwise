@@ -2,17 +2,37 @@
 {% load bunkwise_tags %}
 {% block title %}Attendance — {{ semester.name }}{% endblock %}
 
+{% block extra_head %}
+<style>
+  .bw-card:target {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 30px rgba(0, 212, 255, 0.4) !important;
+    transform: translateY(-2px);
+    transition: all 0.3s ease;
+  }
+  .highlight-card {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 30px rgba(0, 212, 255, 0.4) !important;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-xl">
   <div class="page-header fade-up">
     <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
       <div>
         <h1>✅ Attendance Overview</h1>
-        <p>{{ semester.name }} &nbsp;·&nbsp; {{ semester.get_attendance_policy_display }}</p>
+        <p>{{ semester.name }} &nbsp;·&nbsp; {{ semester.get_attendance_policy_display }} Policy ({{ semester.start_date|date:"d M Y" }} → {{ semester.end_date|date:"d M Y" }})</p>
       </div>
-      <a href="{% url 'bunk_budget' semester_id=semester.id %}" class="btn-bw-primary">
-        <i class="bi bi-piggy-bank"></i> Bunk Budget
-      </a>
+      <div class="d-flex gap-2 flex-wrap">
+        <a href="{% url 'optimizer' semester_id=semester.id %}" class="btn-bw-secondary">
+          <i class="bi bi-stars"></i> Bunk Optimizer
+        </a>
+        <a href="{% url 'bunk_budget' semester_id=semester.id %}" class="btn-bw-primary">
+          <i class="bi bi-piggy-bank"></i> Bunk Budget
+        </a>
+      </div>
     </div>
   </div>
 
@@ -27,22 +47,28 @@
     <div class="row g-4">
       {% for item in subject_data %}
         <div class="col-lg-6 fade-up">
-          <div class="bw-card h-100">
+          <div class="bw-card h-100" id="subject-{{ item.subject.id }}" style="scroll-margin-top:90px;">
 
             <!-- Header -->
             <div class="d-flex align-items-center gap-2 mb-3">
               <span class="subject-dot" style="background:{{ item.subject.color }};"></span>
               <div class="flex-grow-1">
-                <div style="font-size:.95rem;font-weight:700;color:#fff;">
+                <div style="font-size:1.05rem;font-weight:700;color:#fff;">
                   {{ item.subject.icon }} {{ item.subject.name }}
                 </div>
-                <div style="font-size:.72rem;color:var(--text-muted);">
+                <div style="font-size:.74rem;color:var(--text-muted);">
                   {{ item.subject.code }} &nbsp;·&nbsp; {{ item.subject.get_subject_type_display }}
+                  &nbsp;·&nbsp; Policy: {{ semester.get_attendance_policy_display }}
                 </div>
               </div>
-              <span class="risk-badge risk-{{ item.risk }}">
-                {{ item.risk|risk_icon }} {{ item.risk }}
-              </span>
+              <div class="d-flex align-items-center gap-2">
+                <a href="{% url 'subject_edit' subject_id=item.subject.id %}" class="btn-bw-secondary" style="font-size:.7rem;padding:.2rem .45rem;" title="Edit Subject">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <span class="risk-badge risk-{{ item.risk }}">
+                  {{ item.risk|risk_icon }} {{ item.risk }}
+                </span>
+              </div>
             </div>
 
             <!-- Progress bar -->
@@ -52,27 +78,31 @@
                    style="width:{{ pct|pct_bar_width }}%;"></div>
               <div class="att-bar-marker" style="left:{{ target }}%;"></div>
             </div>
-            <div class="d-flex justify-content-between mb-3" style="font-size:.72rem;color:var(--text-muted);">
-              <span>Target: {{ target }}%</span>
+            <div class="d-flex justify-content-between mb-3" style="font-size:.74rem;color:var(--text-muted);">
+              <span>Min Required: {{ target }}% &nbsp;·&nbsp; Effective Target: {{ item.att.effective_target }}%</span>
               <span style="color:{% if item.risk == 'SAFE' %}var(--safe){% elif item.risk == 'CAUTION' %}var(--caution){% else %}var(--critical){% endif %};font-weight:700;">
-                {{ pct }}%
+                Current: {{ pct }}%
               </span>
             </div>
             {% endwith %}
 
             <!-- Stats grid -->
-            <div class="row g-2 mb-3" style="font-size:.8rem;">
-              <div class="col-4 text-center">
-                <div style="font-size:1.2rem;font-weight:800;color:#fff;">{{ item.att.raw_conducted }}</div>
-                <div style="color:var(--text-muted);">Total Classes</div>
+            <div class="row g-2 mb-3 text-center" style="font-size:.8rem;background:rgba(255,255,255,0.02);padding:.6rem .2rem;border-radius:var(--radius-sm);border:1px solid var(--border-color);">
+              <div class="col-3 border-end" style="border-color:var(--border-color) !important;">
+                <div style="font-size:1.15rem;font-weight:800;color:#fff;">{{ item.att.raw_conducted }}</div>
+                <div style="font-size:.68rem;color:var(--text-muted);">Held So Far</div>
               </div>
-              <div class="col-4 text-center">
-                <div style="font-size:1.2rem;font-weight:800;color:var(--safe);">{{ item.att.raw_attended }}</div>
-                <div style="color:var(--text-muted);">Attended</div>
+              <div class="col-3 border-end" style="border-color:var(--border-color) !important;">
+                <div style="font-size:1.15rem;font-weight:800;color:var(--safe);">{{ item.att.raw_attended }}</div>
+                <div style="font-size:.68rem;color:var(--text-muted);">Attended</div>
               </div>
-              <div class="col-4 text-center">
-                <div style="font-size:1.2rem;font-weight:800;color:var(--critical);">{{ item.att.raw_absent }}</div>
-                <div style="color:var(--text-muted);">Absent</div>
+              <div class="col-3 border-end" style="border-color:var(--border-color) !important;">
+                <div style="font-size:1.15rem;font-weight:800;color:var(--critical);">{{ item.att.raw_absent }}</div>
+                <div style="font-size:.68rem;color:var(--text-muted);">Absent</div>
+              </div>
+              <div class="col-3">
+                <div style="font-size:1.15rem;font-weight:800;color:var(--accent);">{{ item.future }}</div>
+                <div style="font-size:.68rem;color:var(--text-muted);">Remaining</div>
               </div>
             </div>
 
@@ -81,44 +111,67 @@
                 <div class="d-flex justify-content-between flex-wrap gap-2">
                   <span>📖 <strong>Lectures:</strong> {{ item.att.lec_attended }}/{{ item.att.lec_conducted }} ({{ item.att.lec_pct }}%)</span>
                   <span>🔬 <strong>Labs:</strong> {{ item.att.lab_attended }}/{{ item.att.lab_conducted }} ({{ item.att.lab_pct }}%)</span>
+                  {% if item.att.tut_conducted > 0 %}
+                    <span>📝 <strong>Tutorials:</strong> {{ item.att.tut_attended }}/{{ item.att.tut_conducted }} ({{ item.att.tut_pct }}%)</span>
+                  {% endif %}
                 </div>
               </div>
             {% endif %}
 
+            <!-- Semester End Outlook Matrix -->
+            <div class="p-2 mb-3 rounded" style="background:rgba(0,212,255,0.03);border:1px dashed var(--border-glow);font-size:.75rem;">
+              <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                  <span style="color:var(--text-muted);">Total Semester Sessions:</span>
+                  <strong style="color:#fff;">{{ item.total_sessions }}</strong>
+                </div>
+                <div>
+                  <span style="color:var(--text-muted);">End-of-Semester Projected:</span>
+                  <strong style="color:{% if item.final_risk == 'SAFE' %}var(--safe){% elif item.final_risk == 'CAUTION' %}var(--caution){% else %}var(--critical){% endif %};">
+                    {{ item.final_pct }}%
+                  </strong>
+                  <span class="risk-badge risk-{{ item.final_risk }}" style="font-size:.6rem;padding:.1rem .35rem;">{{ item.final_risk }}</span>
+                </div>
+              </div>
+            </div>
+
             <div class="divider"></div>
 
-            <!-- Bunk budget & recovery -->
-            <div class="row g-2" style="font-size:.8rem;">
+            <!-- Bunk budget & recovery (considering all sessions till semester end) -->
+            <div class="row g-2 mb-3" style="font-size:.8rem;">
               <div class="col-6">
-                <div style="color:var(--text-muted);">Safe absences left</div>
-                <div style="font-weight:700;color:{% if item.bunk > 0 %}var(--safe){% else %}var(--critical){% endif %};">
+                <div style="color:var(--text-muted);font-size:.7rem;text-transform:uppercase;">Safe Absences Till Semester End</div>
+                <div style="font-size:1.25rem;font-weight:800;color:{% if item.bunk > 0 %}var(--safe){% else %}var(--critical){% endif %};margin-top:2px;">
                   {{ item.bunk }} session{{ item.bunk|pluralize }}
                 </div>
               </div>
               <div class="col-6">
                 {% if item.recovery and item.recovery > 0 %}
-                  <div style="color:var(--text-muted);">Recovery needed</div>
-                  <div style="font-weight:700;color:var(--critical);">
-                    Attend next {{ item.recovery }} sessions
+                  <div style="color:var(--text-muted);font-size:.7rem;text-transform:uppercase;">Recovery Needed</div>
+                  <div style="font-size:1.1rem;font-weight:700;color:var(--critical);margin-top:2px;">
+                    Attend next {{ item.recovery }} session{{ item.recovery|pluralize }}
                   </div>
                 {% else %}
-                  <div style="color:var(--text-muted);">Future sessions</div>
-                  <div style="font-weight:700;color:var(--accent);">{{ item.future }} remaining</div>
+                  <div style="color:var(--text-muted);font-size:.7rem;text-transform:uppercase;">Future Sessions Remaining</div>
+                  <div style="font-size:1.1rem;font-weight:700;color:var(--accent);margin-top:2px;">
+                    {{ item.future }} sessions scheduled
+                  </div>
                 {% endif %}
               </div>
             </div>
 
             <!-- Explanatory note -->
-            <div class="mt-3" style="font-size:.72rem;color:var(--text-muted);background:var(--bg-glass);
-                                      padding:.6rem;border-radius:var(--radius-sm);border:1px solid var(--border-color);">
+            <div style="font-size:.72rem;color:var(--text-muted);background:var(--bg-glass);
+                        padding:.65rem;border-radius:var(--radius-sm);border:1px solid var(--border-color);">
               {% if item.bunk > 0 %}
-                ℹ️ You can miss up to <strong>{{ item.bunk }}</strong> more session{{ item.bunk|pluralize }}
-                of this subject while staying above {{ item.att.min_required }}%, assuming no other absences.
+                ℹ️ Considering all <strong>{{ item.total_sessions }}</strong> scheduled sessions till the end date of the semester,
+                you can afford to safely miss up to <strong style="color:var(--safe);">{{ item.bunk }}</strong> more session{{ item.bunk|pluralize }}
+                and still finish the semester above {{ item.att.min_required }}%.
               {% elif item.recovery and item.recovery > 0 %}
-                ⚠️ You need to attend the next <strong>{{ item.recovery }}</strong> session{{ item.recovery|pluralize }}
-                without any absence to recover to {{ item.att.min_required }}%.
+                ⚠️ You need to attend the next <strong style="color:var(--critical);">{{ item.recovery }}</strong> session{{ item.recovery|pluralize }}
+                consecutively without any absence to recover to {{ item.att.min_required }}%.
               {% else %}
-                ✅ You are exactly at the required attendance.
+                ✅ You are exactly at the required threshold. Any further absence will drop you below {{ item.att.min_required }}%.
               {% endif %}
             </div>
 
@@ -128,4 +181,21 @@
     </div>
   {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  if (window.location.hash) {
+    const el = document.querySelector(window.location.hash);
+    if (el) {
+      setTimeout(() => {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('highlight-card');
+        setTimeout(() => el.classList.remove('highlight-card'), 3000);
+      }, 150);
+    }
+  }
+});
+</script>
 {% endblock %}

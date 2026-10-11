@@ -37,22 +37,25 @@
 
             <!-- Subject info -->
             <div class="col-lg-3">
-              <div class="d-flex align-items-center gap-2">
+              <a href="{% url 'attendance_overview' semester_id=semester.id %}#subject-{{ item.subject.id }}"
+                 class="d-flex align-items-center gap-2 text-decoration-none"
+                 title="Click to view full attendance breakdown for {{ item.subject.name }}">
                 <span class="subject-dot" style="background:{{ item.subject.color }};"></span>
                 <div>
                   <div style="font-size:.9rem;font-weight:700;color:#fff;">
                     {{ item.subject.icon }} {{ item.subject.name }}
+                    <i class="bi bi-box-arrow-up-right text-muted" style="font-size:.7rem;"></i>
                   </div>
-                  <div style="font-size:.7rem;color:var(--text-muted);">{{ item.subject.code }}</div>
+                  <div style="font-size:.7rem;color:var(--text-muted);">{{ item.subject.code }} &nbsp;·&nbsp; {{ item.total_sessions }} total sessions</div>
                 </div>
-              </div>
+              </a>
             </div>
 
             <!-- Progress bar + pct -->
             <div class="col-lg-4">
               {% with pct=item.att.percentage target=item.att.min_required %}
               <div class="d-flex justify-content-between mb-1" style="font-size:.72rem;color:var(--text-muted);">
-                <span>{{ item.att.raw_attended }}/{{ item.att.raw_conducted }} sessions</span>
+                <span>{{ item.att.raw_attended }}/{{ item.att.raw_conducted }} held</span>
                 <span style="font-weight:700;color:#fff;">{{ pct }}%</span>
               </div>
               <div class="att-bar-wrap" style="height:8px;">
@@ -60,8 +63,9 @@
                      style="width:{{ pct|pct_bar_width }}%;"></div>
                 <div class="att-bar-marker" style="left:{{ target }}%;"></div>
               </div>
-              <div style="font-size:.7rem;color:var(--text-muted);margin-top:.2rem;">
-                Min {{ target }}% &nbsp;·&nbsp; Target {{ item.att.effective_target }}%
+              <div class="d-flex justify-content-between" style="font-size:.7rem;color:var(--text-muted);margin-top:.2rem;">
+                <span>Min {{ target }}% &nbsp;·&nbsp; Target {{ item.att.effective_target }}%</span>
+                <span style="color:var(--accent);">Final: ~{{ item.final_pct }}%</span>
               </div>
               {% endwith %}
             </div>
@@ -77,7 +81,7 @@
                           color:{% if item.bunk > 3 %}var(--safe){% elif item.bunk > 0 %}var(--caution){% else %}var(--critical){% endif %};">
                 {{ item.bunk }}
               </div>
-              <div style="font-size:.7rem;color:var(--text-muted);">safe absences</div>
+              <div style="font-size:.7rem;color:var(--text-muted);">safe absents till end</div>
             </div>
 
             <!-- Recovery or future -->
@@ -87,25 +91,30 @@
                 <div style="font-size:.7rem;color:var(--text-muted);">sessions to recover</div>
               {% else %}
                 <div style="font-size:1rem;font-weight:700;color:var(--accent);">{{ item.future_count }}</div>
-                <div style="font-size:.7rem;color:var(--text-muted);">sessions remaining</div>
+                <div style="font-size:.7rem;color:var(--text-muted);">sessions left till end</div>
               {% endif %}
             </div>
 
           </div>
 
           <!-- Explainer -->
-          <div class="mt-2 pt-2" style="border-top:1px solid var(--border-color);font-size:.72rem;color:var(--text-muted);">
-            {% if item.bunk > 0 %}
-              You can miss up to <strong style="color:var(--safe);">{{ item.bunk }}</strong>
-              more session{{ item.bunk|pluralize }} of <em>{{ item.subject.name }}</em>
-              while remaining above the {{ item.att.min_required }}% minimum,
-              assuming no other absences in this subject.
-            {% elif item.recovery and item.recovery > 0 %}
-              ⚠️ You need to attend the next <strong style="color:var(--critical);">{{ item.recovery }}</strong>
-              consecutive session{{ item.recovery|pluralize }} without any absence to recover to {{ item.att.min_required }}%.
-            {% else %}
-              You are exactly at the required minimum. Any further absence will put this subject below threshold.
-            {% endif %}
+          <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mt-2 pt-2" style="border-top:1px solid var(--border-color);font-size:.72rem;color:var(--text-muted);">
+            <div>
+              {% if item.bunk > 0 %}
+                You can safely miss up to <strong style="color:var(--safe);">{{ item.bunk }}</strong>
+                more session{{ item.bunk|pluralize }} of <em>{{ item.subject.name }}</em>
+                till the end of the semester while remaining above the {{ item.att.min_required }}% minimum.
+              {% elif item.recovery and item.recovery > 0 %}
+                ⚠️ You need to attend the next <strong style="color:var(--critical);">{{ item.recovery }}</strong>
+                consecutive session{{ item.recovery|pluralize }} without any absence to recover to {{ item.att.min_required }}%.
+              {% else %}
+                You are exactly at the required minimum. Any further absence will put this subject below threshold.
+              {% endif %}
+            </div>
+            <a href="{% url 'attendance_overview' semester_id=semester.id %}#subject-{{ item.subject.id }}"
+               class="btn-bw-secondary" style="font-size:.68rem;padding:.2rem .5rem;">
+              View Attendance Page →
+            </a>
           </div>
 
         </div>

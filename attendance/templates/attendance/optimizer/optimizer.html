@@ -158,27 +158,47 @@
 
             {% for subj_id, res in optimizer_result.simulation.items %}
               <div class="subject-row mb-3">
-                <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
-                  <div style="font-size:.9rem;font-weight:700;color:#fff;">{{ res.subject_name }}</div>
+                <div class="d-flex align-items-center justify-content-between gap-2 mb-2 flex-wrap">
+                  <a href="{% url 'attendance_overview' semester_id=semester.id %}#subject-{{ res.subject_id|default:subj_id }}"
+                     class="text-decoration-none d-flex align-items-center gap-2"
+                     title="Click to view full attendance details for {{ res.subject_name }}">
+                    <span class="subject-dot" style="background:{{ res.subject_color|default:'var(--accent)' }};"></span>
+                    <span style="font-size:.9rem;font-weight:700;color:#fff;">{{ res.subject_name }}</span>
+                    {% if res.subject_code %}
+                      <span style="font-size:.72rem;color:var(--text-muted);">{{ res.subject_code }}</span>
+                    {% endif %}
+                    <i class="bi bi-box-arrow-up-right text-muted" style="font-size:.7rem;"></i>
+                  </a>
                   <div class="d-flex align-items-center gap-2">
                     <span class="risk-badge risk-{{ res.current_risk }}">{{ res.current_risk }}</span>
                     <i class="bi bi-arrow-right" style="color:var(--text-muted);font-size:.8rem;"></i>
                     <span class="risk-badge risk-{{ res.projected_risk }}">{{ res.projected_risk }}</span>
+                    <a href="{% url 'attendance_overview' semester_id=semester.id %}#subject-{{ res.subject_id|default:subj_id }}"
+                       class="btn-bw-secondary ms-1" style="font-size:.68rem;padding:.15rem .45rem;" title="View all attendance details">
+                      Details →
+                    </a>
                   </div>
                 </div>
                 <div class="row g-2" style="font-size:.8rem;">
-                  <div class="col-4">
+                  <div class="col-3">
                     <div style="color:var(--text-muted);">Current</div>
                     <div style="font-weight:700;color:#fff;">{{ res.current_pct }}%</div>
                   </div>
-                  <div class="col-4">
-                    <div style="color:var(--text-muted);">Projected</div>
+                  <div class="col-3">
+                    <div style="color:var(--text-muted);">Immediate</div>
                     <div style="font-weight:700;
                                 color:{% if res.projected_risk == 'SAFE' %}var(--safe){% elif res.projected_risk == 'CAUTION' %}var(--caution){% else %}var(--critical){% endif %};">
                       {{ res.projected_pct }}%
                     </div>
                   </div>
-                  <div class="col-4">
+                  <div class="col-3">
+                    <div style="color:var(--text-muted);">Semester End</div>
+                    <div style="font-weight:700;
+                                color:{% if res.final_risk == 'SAFE' %}var(--safe){% elif res.final_risk == 'CAUTION' %}var(--caution){% else %}var(--critical){% endif %};">
+                      {{ res.final_pct }}%
+                    </div>
+                  </div>
+                  <div class="col-3">
                     <div style="color:var(--text-muted);">Safe after</div>
                     <div style="font-weight:700;color:var(--accent);">{{ res.safe_after }}</div>
                   </div>

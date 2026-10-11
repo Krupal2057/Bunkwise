@@ -459,17 +459,32 @@ def session_edit(request, session_id):
 def attendance_overview(request, semester_id):
     semester = get_object_or_404(Semester, id=semester_id, user=request.user)
     subjects = semester.subjects.all()
+    today    = timezone.localdate()
 
     subject_data = []
     for subj in subjects:
-        att   = services.calculate_attendance(subj)
-        risk  = services.classify_risk(att)
-        bunk  = services.calculate_bunk_budget(subj, att)
-        recov = services.recovery_sessions_needed(subj, att)
-        future = services.get_future_sessions(subj).count()
+        att    = services.calculate_attendance(subj)
+        risk   = services.classify_risk(att)
+        bunk   = services.calculate_bunk_budget(subj, att)
+        recov  = services.recovery_sessions_needed(subj, att)
+        future_qs = services.get_future_sessions(subj, from_date=today)
+        future_count = future_qs.count()
+        remaining_w = sum(s.attendance_weight for s in future_qs)
+        total_conducted = att['conducted'] + remaining_w
+        final_attended = att['attended'] + remaining_w
+        final_pct = round((final_attended / total_conducted * 100), 2) if total_conducted > 0 else 0.0
+        final_risk = services.classify_risk({
+            'percentage': final_pct,
+            'effective_target': att['effective_target'],
+            'min_required': att['min_required']
+        })
         subject_data.append({
             'subject': subj, 'att': att, 'risk': risk,
-            'bunk': bunk, 'recovery': recov, 'future': future
+            'bunk': bunk, 'recovery': recov,
+            'future': future_count,
+            'final_pct': final_pct,
+            'final_risk': final_risk,
+            'total_sessions': att['raw_conducted'] + future_count,
         })
 
     return render(request, 'attendance/attendance/overview.html', {
@@ -493,72 +508,24 @@ def bunk_budget(request, semester_id):
         risk   = services.classify_risk(att)
         bunk   = services.calculate_bunk_budget(subj, att)
         recov  = services.recovery_sessions_needed(subj, att)
-        future = services.get_future_sessions(subj, from_date=today)
+        future_qs = services.get_future_sessions(subj, from_date=today)
+        future_count = future_qs.count()
+        remaining_w = sum(s.attendance_weight for s in future_qs)
+        total_conducted = att['conducted'] + remaining_w
+        final_attended = att['attended'] + remaining_w
+        final_pct = round((final_attended / total_conducted * 100), 2) if total_conducted > 0 else 0.0
         subject_data.append({
             'subject': subj, 'att': att, 'risk': risk,
             'bunk': bunk, 'recovery': recov,
-            'future_count': future.count(),
+            'future_count': future_count,
+            'total_sessions': att['raw_conducted'] + future_count,
+            'final_pct': final_pct,
         })
 
     return render(request, 'attendance/bunk/budget.html', {
         'semester': semester, 'subject_data': subject_data
     })
 
-
-# ═════════════════════════════════════════════════════════════════════════════
-# What-if Simulator
-# ═════════════════════════════════════════════════════════════════════════════
-
-@login_required
-def simulator(request, semester_id):
-    semester = get_object_or_404(Semester, id=semester_id, user=request.user)
-    today    = timezone.localdate()
-
-    future_sessions = ClassSession.objects.filter(
-        semester=semester,
-        date__gte=today,
-        status='scheduled'
-    ).select_related('subject').order_by('date', 'start_time')
-
-    simulation_result = None
-
-    if request.method == 'POST':
-        selected_ids = request.POST.getlist('session_ids')
-        if selected_ids:
-            simulation_result = services.simulate_absences([int(i) for i in selected_ids])
-            # Save as a snapshot for reference
-            label = request.POST.get('label', f"Simulation on {today}")
-            SimulationSnapshot.objects.create(
-                user=request.user,
-                semester=semester,
-                label=label,
-                result_json=simulation_result
-            )
-        else:
-            messages.warning(request, "Please select at least one session to simulate.")
-
-    return render(request, 'attendance/simulator/simulator.html', {
-        'semester':          semester,
-        'future_sessions':   future_sessions,
-        'simulation_result': simulation_result,
-    })
-
-
-@login_required
-def simulate_date_range_view(request, semester_id):
-    """AJAX endpoint: simulate absence for a date range."""
-    semester = get_object_or_404(Semester, id=semester_id, user=request.user)
-    if request.method == 'POST':
-        data = json.loads(request.body)
-        try:
-            start = date.fromisoformat(data['start_date'])
-            end   = date.fromisoformat(data['end_date'])
-        except (KeyError, ValueError):
-            return JsonResponse({'error': 'Invalid dates'}, status=400)
-
-        result = services.simulate_date_range(semester, start, end)
-        return JsonResponse({'result': result})
-    return JsonResponse({'error': 'POST required'}, status=405)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -613,7 +580,7 @@ def bunk_optimizer(request, semester_id):
             selected_ids = []
 
         if selected_ids:
-            sim = services.simulate_absences(selected_ids)
+            sim = services.simulate_absences(selected_ids, semester=semester, all_subjects=True)
             selected_sessions = ClassSession.objects.filter(id__in=selected_ids).select_related('subject')
             free_minutes = sum(s.duration_minutes for s in selected_sessions)
             any_critical = any(v['projected_risk'] == 'CRITICAL' for v in sim.values())

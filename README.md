@@ -18,9 +18,8 @@
 | **Attendance Marking** | Mark Present / Absent / Cancelled per session; edit any past record |
 | **Attendance Calculation** | Mathematically correct using raw counts (not rounded percentages) |
 | **Risk Indicators** | SAFE / CAUTION / CRITICAL per subject with configurable safety buffer |
-| **Bunk Budget** | Max safe absences using floor((attended − threshold × conducted) / threshold) |
-| **What-if Simulator** | Simulate any set of absences — real data stays unchanged |
-| **Smart Bunk Optimizer** | Sessions / full day / date range — shows ranked risk and impact |
+| **Bunk Budget** | Max safe absences considering all sessions till semester end date |
+| **Smart Bunk Optimizer** | Sessions / full day / date range — shows ranked risk, semester-end impact, and recommendations |
 | **Event Planner** | Plan trips, medical appointments — see projected attendance impact |
 | **Bridge Day Detector** | Finds isolated working days between holidays |
 | **Recovery Planner** | Calculates consecutive sessions needed to recover to minimum % |
@@ -114,13 +113,18 @@ All calculations use raw integer counts internally. Percentages are only for dis
 ```
 Attendance %     = (attended / conducted) × 100
 
-Bunk Budget      = floor( (attended − threshold × conducted) / threshold )
+Bunk Budget      = floor( (attended + remaining_sessions) − threshold × (conducted + remaining_sessions) )
                    where threshold = min_required / 100
+                   (constrained to [0, remaining_sessions])
 
 Recovery needed  = ceil( (threshold × conducted − attended) / (1 − threshold) )
 
-Projected after N absences:
+Projected after N absences (Immediate):
                  = (attended / (conducted + N)) × 100
+
+Projected at End of Semester:
+                 = ((attended + remaining_attended) / (conducted + total_remaining_scheduled)) × 100
+                 where remaining_attended assumes attendance in all unskipped future sessions
 ```
 
 ---
@@ -160,7 +164,7 @@ bunkwise/
 1. **Services layer**: All attendance math lives in `services.py`. Views only handle HTTP.
 2. **Raw counts as source of truth**: Never store percentages — always compute from integers.
 3. **Configurable policy**: Session-based vs period-based (a 2h lab = 1 or 2 units).
-4. **Simulation is safe**: What-if simulator never writes to `AttendanceRecord` or `ClassSession`.
+4. **Simulation is safe**: Planners and optimizer never write to `AttendanceRecord` or `ClassSession`.
 5. **Explainable recommendations**: The optimizer always explains consequences, never just says "you can bunk N classes."
 
 ---

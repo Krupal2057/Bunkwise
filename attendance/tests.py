@@ -82,6 +82,33 @@ class BunkWiseAttendanceLogicTests(TestCase):
         budget_high = services.calculate_bunk_budget(self.subject, att_data_high)
         self.assertEqual(budget_high, 5)
 
+    def test_bunk_budget_calculation_with_future_sessions(self):
+        # 10 conducted so far: 8 attended, 2 absent
+        att_data = {
+            'conducted': 10,
+            'attended': 8,
+            'absent': 2,
+            'percentage': 80.0,
+            'min_required': 75.0,
+            'effective_target': 80.0
+        }
+        # Create 30 future scheduled sessions -> Total semester sessions = 40
+        for i in range(30):
+            ClassSession.objects.create(
+                semester=self.semester,
+                subject=self.subject,
+                date=self.today + timedelta(days=i + 1),
+                start_time=time(9, 0),
+                end_time=time(10, 0),
+                duration_minutes=60,
+                status='scheduled'
+            )
+        # Minimum required attended out of 40 = 0.75 * 40 = 30
+        # If student attends all 30 remaining, max attended = 8 + 30 = 38
+        # Safe absences = 38 - 30 = 8 safe absences till semester end
+        budget = services.calculate_bunk_budget(self.subject, att_data)
+        self.assertEqual(budget, 8)
+
     def test_recovery_sessions_needed(self):
         # 6 attended out of 10 conducted (60%), threshold 75%
         # shortfall = 0.75 * 10 - 6 = 7.5 - 6 = 1.5
@@ -157,6 +184,12 @@ class BunkWiseViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "CS401")
 
+    def test_attendance_overview_view(self):
+        self.client.login(username='teststudent', password='password123')
+        response = self.client.get(reverse('attendance_overview', args=[self.semester.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Attendance Overview")
+
     def test_timetable_view(self):
         self.client.login(username='teststudent', password='password123')
         # Create a timetable entry to verify display
@@ -171,11 +204,6 @@ class BunkWiseViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Weekly Schedule")
         self.assertContains(response, "Database Systems")
-
-    def test_simulator_view(self):
-        self.client.login(username='teststudent', password='password123')
-        response = self.client.get(reverse('simulator', args=[self.semester.id]))
-        self.assertEqual(response.status_code, 200)
 
     def test_optimizer_view(self):
         self.client.login(username='teststudent', password='password123')
@@ -226,12 +254,82 @@ class BunkWiseViewsTests(TestCase):
         self.assertEqual(subj_res['current_pct'], 80.0)
         self.assertAlmostEqual(subj_res['projected_pct'], 66.67, places=1)
         self.assertEqual(subj_res['projected_risk'], 'CRITICAL')
+        # Both scheduled sessions were bunked, so final pct matches immediate pct
+        self.assertAlmostEqual(subj_res['final_pct'], 66.67, places=1)
 
         # Real session statuses in DB must remain 'scheduled'
         fut1.refresh_from_db()
         fut2.refresh_from_db()
         self.assertEqual(fut1.status, 'scheduled')
         self.assertEqual(fut2.status, 'scheduled')
+
+    def test_simulation_calculates_final_semester_projection(self):
+        # Create 10 conducted sessions: 8 present, 2 absent (80%)
+        for i in range(10):
+            ClassSession.objects.create(
+                semester=self.semester,
+                subject=self.subject,
+                date=self.today - timedelta(days=i + 1),
+                start_time=time(9, 0),
+                end_time=time(10, 0),
+                duration_minutes=60,
+                status='present' if i < 8 else 'absent'
+            )
+
+        # Add 4 future scheduled sessions: fut1, fut2, fut3, fut4
+        fut1 = ClassSession.objects.create(
+            semester=self.semester, subject=self.subject,
+            date=self.today + timedelta(days=1), start_time=time(9, 0),
+            end_time=time(10, 0), duration_minutes=60, status='scheduled'
+        )
+        fut2 = ClassSession.objects.create(
+            semester=self.semester, subject=self.subject,
+            date=self.today + timedelta(days=2), start_time=time(9, 0),
+            end_time=time(10, 0), duration_minutes=60, status='scheduled'
+        )
+        fut3 = ClassSession.objects.create(
+            semester=self.semester, subject=self.subject,
+            date=self.today + timedelta(days=3), start_time=time(9, 0),
+            end_time=time(10, 0), duration_minutes=60, status='scheduled'
+        )
+        fut4 = ClassSession.objects.create(
+            semester=self.semester, subject=self.subject,
+            date=self.today + timedelta(days=4), start_time=time(9, 0),
+            end_time=time(10, 0), duration_minutes=60, status='scheduled'
+        )
+
+        # Simulate bunking only fut1 (1 session skipped):
+        # Immediate drop: 8 attended / (10 conducted + 1 bunk) = 8/11 = 72.73%
+        # End of semester: total sessions = 10 + 4 = 14.
+        # Attending fut2, fut3, fut4 (3 sessions) -> final attended = 8 + 3 = 11.
+        # Final % = 11 / 14 = 78.57%
+        res = services.simulate_absences([fut1.id])
+        subj_res = res[self.subject.id]
+        self.assertAlmostEqual(subj_res['projected_pct'], 72.73, places=2)
+        self.assertAlmostEqual(subj_res['final_pct'], 78.57, places=2)
+        self.assertEqual(subj_res['remaining_sessions'], 4)
+        self.assertEqual(subj_res['final_conducted'], 14.0)
+        self.assertEqual(subj_res['final_attended'], 11.0)
+
+    def test_simulation_returns_all_subjects_in_semester(self):
+        # Create a second subject in the same semester with no skipped sessions
+        subj2 = Subject.objects.create(
+            semester=self.semester,
+            name="Operating Systems",
+            code="CS302",
+            min_attendance=75.0
+        )
+        fut = ClassSession.objects.create(
+            semester=self.semester, subject=self.subject,
+            date=self.today + timedelta(days=1), start_time=time(9, 0),
+            end_time=time(10, 0), duration_minutes=60, status='scheduled'
+        )
+
+        res = services.simulate_absences([fut.id], semester=self.semester, all_subjects=True)
+        self.assertIn(self.subject.id, res)
+        self.assertIn(subj2.id, res)
+        # subj2 has weight_lost == 0
+        self.assertEqual(res[subj2.id]['weight_lost'], 0)
 
     def test_special_day_affects_sessions(self):
         sess = ClassSession.objects.create(

@@ -51,9 +51,7 @@ urlpatterns = [
     # ── Bunk budget ────────────────────────────────────────────────────────
     path('semester/<int:semester_id>/bunk-budget/',         views.bunk_budget,   name='bunk_budget'),
 
-    # ── Simulator / Optimizer ──────────────────────────────────────────────
-    path('semester/<int:semester_id>/simulator/',           views.simulator,           name='simulator'),
-    path('semester/<int:semester_id>/simulate-range/',      views.simulate_date_range_view, name='simulate_range'),
+    # ── Optimizer & Bridge Days ───────────────────────────────────────────
     path('semester/<int:semester_id>/optimizer/',           views.bunk_optimizer,      name='optimizer'),
     path('semester/<int:semester_id>/bridge-days/',         views.bridge_days,         name='bridge_days'),
 

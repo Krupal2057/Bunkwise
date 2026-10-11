@@ -51,28 +51,27 @@
 
         <!-- Impact analysis -->
         <div style="font-size:.8rem;color:var(--text-secondary);margin-bottom:.75rem;">
-          <strong>If you take this day off:</strong>
+          <strong>All subjects attendance status &amp; impact if you take this day off:</strong>
         </div>
 
         {% if bridge.impact %}
-          {% with all_safe=True %}
-            {% for sid, res in bridge.impact.items %}
-              {% if res.projected_risk != 'SAFE' %}{% with all_safe=False %}{% endwith %}{% endif %}
-            {% endfor %}
-          {% endwith %}
-
           {% include 'attendance/events/_impact_table.html' with impact=bridge.impact %}
 
           <!-- Verdict -->
           <div class="mt-2" style="font-size:.75rem;">
             {% for sid, res in bridge.impact.items %}
-              {% if res.projected_risk == 'CRITICAL' %}
+              {% if res.weight_lost > 0 and res.projected_risk == 'CRITICAL' %}
                 <div class="bw-alert bw-alert-danger mt-2">
                   <i class="bi bi-x-circle-fill"></i>
-                  Taking this bridge day off would put <strong>{{ res.subject_name }}</strong> below the minimum
+                  Taking this bridge day off would drop <strong>{{ res.subject_name }}</strong> below the minimum
                   required attendance ({{ res.projected_pct }}% → min {{ res.min_required }}%). <strong>Not recommended.</strong>
                 </div>
-                {% endif %}
+              {% elif res.weight_lost > 0 and res.projected_risk == 'CAUTION' %}
+                <div class="bw-alert bw-alert-warning mt-2">
+                  <i class="bi bi-exclamation-triangle-fill"></i>
+                  Taking this bridge day off would put <strong>{{ res.subject_name }}</strong> in the caution zone ({{ res.projected_pct }}%).
+                </div>
+              {% endif %}
             {% endfor %}
           </div>
         {% else %}

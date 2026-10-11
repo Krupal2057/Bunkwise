@@ -121,7 +121,12 @@
         </div>
 
         {% for item in data.subject_data %}
-        <div class="subject-row">
+        <a href="{% url 'attendance_overview' semester_id=data.semester.id %}#subject-{{ item.subject.id }}"
+           class="subject-row d-block text-decoration-none mb-2"
+           style="cursor:pointer;transition:var(--transition);border-radius:var(--radius-sm);"
+           onmouseover="this.style.borderColor='var(--border-glow)';this.style.transform='translateY(-1px)';"
+           onmouseout="this.style.borderColor='var(--border-color)';this.style.transform='none';"
+           title="Click to view full attendance breakdown for {{ item.subject.name }}">
           <div class="d-flex align-items-center gap-2 mb-2">
             <span class="subject-dot" style="background:{{ item.subject.color }};"></span>
             <span style="font-size:.9rem;font-weight:600;color:#fff;">
@@ -130,10 +135,13 @@
             {% if item.subject.code %}
               <span style="font-size:.7rem;color:var(--text-muted);">{{ item.subject.code }}</span>
             {% endif %}
-            <span class="ms-auto risk-badge risk-{{ item.risk }}">
-              {% if item.risk == 'SAFE' %}✅{% elif item.risk == 'CAUTION' %}⚠️{% else %}🚨{% endif %}
-              {{ item.risk }}
-            </span>
+            <div class="ms-auto d-flex align-items-center gap-2">
+              <span class="risk-badge risk-{{ item.risk }}">
+                {% if item.risk == 'SAFE' %}✅{% elif item.risk == 'CAUTION' %}⚠️{% else %}🚨{% endif %}
+                {{ item.risk }}
+              </span>
+              <i class="bi bi-chevron-right text-muted" style="font-size:.75rem;"></i>
+            </div>
           </div>
 
           <!-- Progress bar -->
@@ -144,12 +152,12 @@
             <!-- Target marker -->
             <div class="att-bar-marker" style="left:{{ target }}%;"></div>
           </div>
-          <div class="d-flex justify-content-between" style="font-size:.72rem;color:var(--text-muted);">
-            <span>{{ item.att.raw_attended }}/{{ item.att.raw_conducted }} sessions &nbsp;·&nbsp; <strong style="color:var(--text-primary);">{{ pct }}%</strong></span>
-            <span>Min {{ target }}% &nbsp;|&nbsp; Budget: <strong style="color:var(--safe);">{{ item.bunk }}</strong></span>
+          <div class="d-flex justify-content-between flex-wrap gap-1" style="font-size:.72rem;color:var(--text-muted);">
+            <span>{{ item.att.raw_attended }}/{{ item.att.raw_conducted }} held &nbsp;·&nbsp; <strong style="color:var(--text-primary);">{{ pct }}%</strong></span>
+            <span><strong style="color:var(--safe);">{{ item.bunk }}</strong> safe absents &nbsp;·&nbsp; <span style="color:var(--accent);">{{ item.remaining_sessions }} left</span> of {{ item.total_sessions }}</span>
           </div>
           {% endwith %}
-        </div>
+        </a>
         {% empty %}
           <div class="empty-state">
             <div class="icon">📚</div>
@@ -194,9 +202,6 @@
         <div class="d-grid gap-2">
           <a href="{% url 'calendar_view' semester_id=data.semester.id %}" class="btn-bw-secondary justify-content-start">
             <i class="bi bi-calendar3"></i> Open Calendar
-          </a>
-          <a href="{% url 'simulator' semester_id=data.semester.id %}" class="btn-bw-secondary justify-content-start">
-            <i class="bi bi-play-circle"></i> What-if Simulator
           </a>
           <a href="{% url 'optimizer' semester_id=data.semester.id %}" class="btn-bw-secondary justify-content-start">
             <i class="bi bi-stars"></i> Bunk Optimizer
